@@ -522,11 +522,18 @@ version: "1.0.0"
 
 ## Links
 
-- **Tekton Pipelines**: ../cluster-config/tekton/pipelines/
-- **AAP Config**: ../aap-config-as-code/
-- **Collections**: ../automation-collection-example/
-- **Execution Environment**: ../automation-ee-example/
-- **Project Docs**: ../specs/001-cloud-native-ansible-lifecycle/
+### Related Repositories
+- **Cluster Config** (Platform GitOps): https://github.com/djdanielsson/rh1-cluster-config
+  - Tekton Pipelines: https://github.com/djdanielsson/rh1-cluster-config/tree/main/tekton/pipelines
+- **AAP Config as Code**: https://github.com/djdanielsson/rh1-aap-config-as-code
+- **Ansible Collection**: https://github.com/djdanielsson/rh1-custom-collection
+- **Execution Environment**: https://github.com/djdanielsson/rh1-custom-ee
+
+### Documentation
+- **Project Workspace**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle
+- **Project Specs**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/tree/main/specs/001-cloud-native-ansible-lifecycle
+- **Quickstart Guide**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/specs/001-cloud-native-ansible-lifecycle/quickstart.md
+- **Constitution**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/.specify/memory/constitution.md
 
 ---
 
