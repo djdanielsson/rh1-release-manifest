@@ -1,0 +1,60 @@
+---
+# Development Release - Auto-updated on every merge to main
+# This manifest always points to the latest version in each repository
+
+version: "dev"
+created: "2025-10-29T00:00:00Z"
+created_by: "automated"
+description: "Development environment - always latest"
+
+components:
+  aap_configuration:
+    repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
+    commit: "HEAD"  # Resolved to actual SHA by pipeline
+    branch: "main"
+    notes: "Auto-deployed on every push to main"
+
+  collections:
+    repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
+    commit: "HEAD"  # Resolved to actual SHA by pipeline
+    branch: "main"
+    notes: "Auto-deployed on every push to main"
+
+  execution_environment:
+    registry: "quay.io"
+    repository: "myorg/custom-ee"
+    tag: "dev"  # Auto-built on every push
+    digest: "latest"  # Resolved to actual digest by pipeline
+    notes: "Auto-built and deployed on every push"
+
+environments:
+  dev:
+    deployed: "auto"
+    validated: false  # Validation is for QA/Prod only
+    validated_by: "n/a"
+    validated_at: "n/a"
+    notes: "Continuously deployed - for development testing only"
+
+validation:
+  tests_required:
+    - ansible-lint
+    - molecule-test
+    - yaml-lint
+
+  tests_passed: []  # Populated by CI/CD
+
+  approval_required: false  # No approval needed for dev
+  approved_by: "n/a"
+  approved_at: "n/a"
+  approval_notes: "Development environment - no approval required"
+
+metadata:
+  jira_ticket: "n/a"
+  pull_requests: []
+  documentation: "../GETTING-STARTED.md"
+  rollback_tested: false
+  rollback_procedure: "Revert commits and redeploy"
+  known_issues:
+    - "Development environment may be unstable"
+  workarounds: []
+

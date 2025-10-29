@@ -1,0 +1,82 @@
+---
+# Release v1.0.0 - Initial Production Release
+version: "1.0.0"
+created: "2025-10-29T00:00:00Z"
+created_by: "platform-team"
+description: "Initial production release with complete GitOps platform"
+
+components:
+  aap_configuration:
+    repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
+    commit: "abc123def456789012345678901234567890abcd"  # Replace with actual SHA
+    branch: "main"
+    notes: |
+      - Initial AAP configuration for dev/qa/prod
+      - dispatch role with wildcard variables
+      - Custom credential types
+
+  collections:
+    repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
+    commit: "def456abc123789012345678901234567890abcd"  # Replace with actual SHA
+    branch: "main"
+    notes: |
+      - Initial collection with example role
+      - Molecule testing configured
+      - Sample modules and plugins
+
+  execution_environment:
+    registry: "quay.io"
+    repository: "myorg/custom-ee"
+    tag: "1.0.0"
+    digest: "sha256:fedcba9876543210abcdef1234567890abcdef"  # Replace with actual digest
+    notes: |
+      - Based on AAP 2.5 ee-minimal-rhel9
+      - Includes custom collection
+      - Includes infra.aap_configuration collection
+
+environments:
+  qa:
+    deployed: "2025-10-29T10:00:00Z"
+    validated: true
+    validated_by: "qa-team"
+    validated_at: "2025-10-29T12:00:00Z"
+    notes: "All QA tests passed successfully"
+
+  prod:
+    deployed: null
+    validated: false
+    validated_by: null
+    validated_at: null
+    notes: "Awaiting approval for production deployment"
+
+validation:
+  tests_required:
+    - smoke-tests
+    - integration-tests
+    - security-scan
+    - performance-tests
+
+  tests_passed:
+    - smoke-tests
+    - integration-tests
+    - security-scan
+
+  approval_required: true
+  approved_by: null
+  approved_at: null
+  approval_notes: ""
+
+metadata:
+  jira_ticket: "PLAT-100"
+  pull_requests:
+    - "https://github.com/djdanielsson/rh1-aap-config-as-code/pull/1"
+    - "https://github.com/djdanielsson/rh1-custom-collection/pull/1"
+
+  documentation: "../specs/001-cloud-native-ansible-lifecycle/quickstart.md"
+
+  rollback_tested: true
+  rollback_procedure: "Run promotion pipeline with v0.9.0 manifest"
+
+  known_issues: []
+  workarounds: []
+

@@ -1,0 +1,36 @@
+# Release Manifest Repository - GitIgnore
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+
+# Editor files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Secrets (should never be in manifests anyway)
+*.key
+*.pem
+*password*
+*secret*
+*token*
+
+# Build artifacts
+build/
+dist/
+

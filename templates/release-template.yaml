@@ -1,0 +1,76 @@
+---
+# Release Manifest Template
+# Copy this file to releases/release-vX.Y.Z.yaml and fill in actual values
+
+version: "X.Y.Z"
+created: "YYYY-MM-DDTHH:MM:SSZ"
+created_by: "username"
+description: "Brief description of this release"
+
+components:
+  # AAP Configuration repository
+  aap_configuration:
+    repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
+    commit: "full-40-character-git-sha"
+    branch: "main"
+    notes: "Description of AAP config changes"
+  
+  # Ansible Collection repository
+  collections:
+    repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
+    commit: "full-40-character-git-sha"
+    branch: "main"
+    notes: "Description of collection changes"
+  
+  # Execution Environment image
+  execution_environment:
+    registry: "quay.io"
+    repository: "myorg/custom-ee"
+    tag: "X.Y.Z"
+    digest: "sha256:full-image-digest"
+    notes: "Description of EE changes"
+
+environments:
+  qa:
+    deployed: null  # Set to ISO 8601 timestamp when deployed
+    validated: false  # Set to true after validation
+    validated_by: null  # Username of validator
+    validated_at: null  # ISO 8601 timestamp
+    notes: ""
+  
+  prod:
+    deployed: null
+    validated: false
+    validated_by: null
+    validated_at: null
+    notes: ""
+
+validation:
+  # Tests that must pass before promotion
+  tests_required:
+    - smoke-tests
+    - integration-tests
+    - security-scan
+  
+  tests_passed: []  # Populate as tests complete
+  
+  # Approval workflow
+  approval_required: true
+  approved_by: null  # Username of approver
+  approved_at: null  # ISO 8601 timestamp
+  approval_notes: ""
+
+metadata:
+  # Links to related resources
+  jira_ticket: ""
+  pull_requests: []
+  documentation: ""
+  
+  # Rollback information
+  rollback_tested: false
+  rollback_procedure: ""
+  
+  # Known issues
+  known_issues: []
+  workarounds: []
+
