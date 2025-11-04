@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
+          # Note: No pip cache - this repo has no Python dependencies
 
       # Use official pre-commit action
       # Handles caching, environment management, and tool installation automatically
