@@ -46,8 +46,7 @@ rules:
     max-spaces-inside: 1
 
   # Key duplicates - forbid
-  key-duplicates:
-    forbid-duplicated-merge-keys: true
+  key-duplicates: enable
 
   # Octal values - quote them
   octal-values:

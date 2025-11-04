@@ -38,9 +38,9 @@ jobs:
           for manifest in releases/release-*.yaml; do
             if [ -f "$manifest" ]; then
               echo "Validating $manifest..."
-              
+
               # Check required fields
-              python3 << EOF
+              python3 <<'EOF'
 import yaml
 import sys
 
