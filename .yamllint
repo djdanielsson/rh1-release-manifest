@@ -1,0 +1,67 @@
+---
+# YAML Lint Configuration for automation-release-manifest
+# Release manifest files
+
+extends: default
+
+rules:
+  # Line length - allow longer lines for commit SHAs and image URIs
+  line-length:
+    max: 160
+    level: warning
+
+  # Indentation - 2 spaces
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Comments - require space after #
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1
+
+  # Document start --- is required
+  document-start:
+    present: true
+
+  # Allow empty values (for null fields)
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: false
+
+  # Truthy values - standard
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no', 'null']
+    check-keys: false
+
+  # Brackets - consistent spacing
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+
+  # Braces - consistent spacing
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+  # Key duplicates - forbid
+  key-duplicates:
+    forbid-duplicated-merge-keys: true
+
+  # Octal values - quote them
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+
+  # Quoted strings - only when necessary
+  quoted-strings:
+    quote-type: double
+    required: only-when-needed
+
+# Ignore certain files
+ignore: |
+  .secrets.baseline
+
+
+

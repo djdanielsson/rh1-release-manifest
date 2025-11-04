@@ -1,0 +1,335 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/your-org/rh1_ansible_code_lifecycle/main/automation-release-manifest/schemas/release-manifest-schema.json",
+  "title": "Ansible Automation Release Manifest",
+  "description": "Schema for validating Ansible Automation Platform release manifests following Constitutional Article III: Atomic Promotion",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "pattern": "^v[0-9]+$",
+      "description": "API version of the manifest format",
+      "examples": ["v1"]
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["ReleaseManifest"],
+      "description": "Type of manifest"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "version", "environment", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^release-[a-z0-9.-]+$",
+          "description": "Release name following naming convention: release-{version}",
+          "examples": ["release-v1.0.0", "release-dev"]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9]+)?|dev|qa|prod)$",
+          "description": "Semantic version or environment name",
+          "examples": ["v1.0.0", "v1.1.0-beta", "dev"]
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["dev", "qa", "prod"],
+          "description": "Target environment for this release"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when manifest was created",
+          "examples": ["2024-01-15T10:30:00Z"]
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "User or system that created this manifest",
+          "examples": ["user@example.com", "tekton-pipeline"]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Human-readable description of this release"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels for categorization"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Additional metadata annotations"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": ["components"],
+      "additionalProperties": false,
+      "properties": {
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "description": "List of components in this release",
+          "items": {
+            "type": "object",
+            "required": ["name", "type", "version"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+                "description": "Component name (lowercase, alphanumeric, hyphens)",
+                "examples": ["automation-collection", "execution-environment", "aap-config"]
+              },
+              "type": {
+                "type": "string",
+                "enum": ["collection", "execution-environment", "aap-config", "cluster-config"],
+                "description": "Type of component"
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9]+)?$",
+                "description": "Semantic version of the component",
+                "examples": ["v1.0.0", "v1.2.3-beta"]
+              },
+              "repository": {
+                "type": "string",
+                "format": "uri",
+                "description": "Git repository URL",
+                "examples": ["https://github.com/org/repo", "git@github.com:org/repo.git"]
+              },
+              "commitSha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$",
+                "description": "Git commit SHA (full 40 characters)",
+                "examples": ["a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"]
+              },
+              "imageDigest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$",
+                "description": "Container image digest (for execution environments)",
+                "examples": ["sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"]
+              },
+              "imageName": {
+                "type": "string",
+                "description": "Full container image name with registry",
+                "examples": ["quay.io/org/ansible-ee:v1.0.0"]
+              },
+              "path": {
+                "type": "string",
+                "description": "Path within repository (if monorepo)",
+                "examples": ["automation-collection-example/"]
+              },
+              "dependencies": {
+                "type": "array",
+                "description": "List of component dependencies",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "version"],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Dependency name"
+                    },
+                    "version": {
+                      "type": "string",
+                      "description": "Dependency version"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": ["collection", "python-package", "system-package"],
+                      "description": "Type of dependency"
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Additional component-specific metadata"
+              }
+            }
+          }
+        },
+        "tests": {
+          "type": "object",
+          "description": "Test results for this release",
+          "properties": {
+            "passed": {
+              "type": "boolean",
+              "description": "Overall test pass status"
+            },
+            "suites": {
+              "type": "array",
+              "description": "Individual test suite results",
+              "items": {
+                "type": "object",
+                "required": ["name", "passed"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Test suite name"
+                  },
+                  "passed": {
+                    "type": "boolean",
+                    "description": "Test suite pass status"
+                  },
+                  "duration": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Test duration in seconds"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to detailed test results"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "approvals": {
+          "type": "array",
+          "description": "List of approvals for this release (Constitutional Article II: Separation of Duties)",
+          "items": {
+            "type": "object",
+            "required": ["approver", "approvedAt"],
+            "properties": {
+              "approver": {
+                "type": "string",
+                "description": "Email or identifier of approver"
+              },
+              "approvedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp of approval"
+              },
+              "role": {
+                "type": "string",
+                "enum": ["developer", "qa", "platform-engineer", "release-manager"],
+                "description": "Role of approver"
+              },
+              "comment": {
+                "type": "string",
+                "maxLength": 1000,
+                "description": "Optional approval comment"
+              }
+            }
+          }
+        },
+        "promotions": {
+          "type": "array",
+          "description": "History of environment promotions",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "promotedAt"],
+            "properties": {
+              "from": {
+                "type": "string",
+                "enum": ["dev", "qa", "prod"],
+                "description": "Source environment"
+              },
+              "to": {
+                "type": "string",
+                "enum": ["dev", "qa", "prod"],
+                "description": "Target environment"
+              },
+              "promotedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp of promotion"
+              },
+              "promotedBy": {
+                "type": "string",
+                "description": "User or system that promoted"
+              },
+              "automated": {
+                "type": "boolean",
+                "description": "Whether promotion was automated"
+              }
+            }
+          }
+        },
+        "securityScan": {
+          "type": "object",
+          "description": "Security scan results (Constitutional Article V: Zero-Trust Security)",
+          "properties": {
+            "scannedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When security scan was performed"
+            },
+            "passed": {
+              "type": "boolean",
+              "description": "Whether security scan passed"
+            },
+            "vulnerabilities": {
+              "type": "object",
+              "properties": {
+                "critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "high": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "medium": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "low": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "reportUrl": {
+              "type": "string",
+              "format": "uri",
+              "description": "URL to detailed security report"
+            }
+          }
+        },
+        "rollbackTarget": {
+          "type": "string",
+          "description": "Previous release version for rollback",
+          "examples": ["release-v1.0.0"]
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "description": "Current status of the release",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["draft", "testing", "approved", "deployed", "failed", "rolled-back"],
+          "description": "Current state of the release"
+        },
+        "deployedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When release was deployed"
+        },
+        "message": {
+          "type": "string",
+          "description": "Status message or error details"
+        }
+      }
+    }
+  }
+}
+

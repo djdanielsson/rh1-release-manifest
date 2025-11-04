@@ -1,0 +1,241 @@
+# DevWorkspace definition for OpenShift Dev Spaces / Eclipse Che
+# Used for release manifest management on OpenShift
+schemaVersion: 2.2.0
+metadata:
+  name: automation-release-manifest
+  version: 1.0.0
+  displayName: Release Manifest Development
+  description: Development environment for Ansible Automation release manifest management
+  tags:
+    - Release
+    - Manifest
+    - GitOps
+    - Automation
+  projectType: release
+  language: yaml
+  provider: Red Hat
+  supportUrl: https://github.com/your-org/rh1_ansible_code_lifecycle
+
+# Parent devfile - use Universal Developer Image
+parent:
+  id: universal-developer-image
+  registryUrl: https://registry.devfile.io
+
+# Components - containers, volumes, plugins
+components:
+  # Main development container
+  - name: tools
+    container:
+      image: quay.io/devfile/universal-developer-image:latest
+      memoryLimit: 2Gi
+      memoryRequest: 512Mi
+      cpuLimit: 1000m
+      cpuRequest: 250m
+      mountSources: true
+      volumeMounts:
+        - name: cache
+          path: /home/user/.cache
+      env:
+        - name: WORKSPACE
+          value: ${PROJECT_SOURCE}
+
+  # Volume for caching
+  - name: cache
+    volume:
+      size: 1Gi
+
+  # VS Code extensions
+  - name: vscode-yaml
+    plugin:
+      id: redhat/vscode-yaml/latest
+
+# Commands - tasks that can be executed
+commands:
+  # Setup commands
+  - id: install-tools
+    exec:
+      label: "Install Development Tools"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        # Install yq
+        VERSION=v4.40.5
+        wget -q https://github.com/mikefarah/yq/releases/download/${VERSION}/yq_linux_amd64 -O /tmp/yq
+        sudo mv /tmp/yq /usr/local/bin/yq
+        sudo chmod +x /usr/local/bin/yq
+        
+        # Install Python tools
+        pip install --user yamllint pre-commit jsonschema pyyaml semver
+        
+        # Make scripts executable
+        chmod +x scripts/*.sh
+        
+        echo "✅ Tools installed successfully"
+      group:
+        kind: build
+        isDefault: false
+
+  - id: setup-precommit
+    exec:
+      label: "Setup Pre-commit Hooks"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -f .pre-commit-config.yaml ]; then
+          pre-commit install
+          pre-commit install --hook-type commit-msg
+          echo "✅ Pre-commit hooks installed"
+        fi
+      group:
+        kind: build
+        isDefault: false
+
+  # Validation commands
+  - id: validate-manifest
+    exec:
+      label: "Validate Release Manifest"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -z "$1" ]; then
+          echo "Usage: Provide manifest file as argument"
+          echo "Example: releases/release-v1.0.0.yaml"
+          exit 1
+        fi
+        ./scripts/validate-manifest.sh "$1"
+      group:
+        kind: test
+        isDefault: true
+
+  - id: validate-all-manifests
+    exec:
+      label: "Validate All Manifests"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        for manifest in releases/release-*.yaml; do
+          echo "Validating $manifest..."
+          ./scripts/validate-manifest.sh "$manifest" || exit 1
+        done
+        echo "✅ All manifests valid"
+      group:
+        kind: test
+        isDefault: false
+
+  - id: lint-yaml
+    exec:
+      label: "YAML Lint"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: yamllint releases/ templates/
+      group:
+        kind: test
+        isDefault: false
+
+  # Release commands
+  - id: create-manifest
+    exec:
+      label: "Create New Release Manifest"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -z "$1" ]; then
+          echo "Usage: Provide version as argument"
+          echo "Example: v1.1.0"
+          exit 1
+        fi
+        ./scripts/create-manifest.sh "$1"
+      group:
+        kind: build
+        isDefault: false
+
+  - id: promote-manifest
+    exec:
+      label: "Promote Release"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -z "$1" ] || [ -z "$2" ]; then
+          echo "Usage: Provide source and target as arguments"
+          echo "Example: dev qa"
+          exit 1
+        fi
+        ./scripts/promote.sh "$1" "$2"
+      group:
+        kind: run
+        isDefault: false
+
+  # Query commands
+  - id: list-releases
+    exec:
+      label: "List All Releases"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        echo "Available releases:"
+        ls -1 releases/release-*.yaml | xargs -I {} basename {} | sed 's/release-//;s/.yaml//'
+      group:
+        kind: run
+        isDefault: false
+
+  - id: show-manifest
+    exec:
+      label: "Show Manifest Details"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -z "$1" ]; then
+          echo "Usage: Provide manifest file as argument"
+          exit 1
+        fi
+        echo "Manifest: $1"
+        echo "Version: $(yq eval '.metadata.version' $1)"
+        echo "Environment: $(yq eval '.metadata.environment' $1)"
+        echo "Components:"
+        yq eval '.components[] | "  - " + .name + ": " + .version' $1
+      group:
+        kind: run
+        isDefault: false
+
+  - id: diff-manifests
+    exec:
+      label: "Compare Two Manifests"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -z "$1" ] || [ -z "$2" ]; then
+          echo "Usage: Provide two manifest files as arguments"
+          exit 1
+        fi
+        diff -u "$1" "$2" || true
+      group:
+        kind: run
+        isDefault: false
+
+  # Git commands
+  - id: git-status
+    exec:
+      label: "Git Status"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: git status
+      group:
+        kind: run
+        isDefault: false
+
+  - id: pre-commit-run
+    exec:
+      label: "Run Pre-commit Checks"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: pre-commit run --all-files
+      group:
+        kind: test
+        isDefault: false
+
+# Events - automatic actions
+events:
+  postStart:
+    - install-tools
+    - setup-precommit
+

@@ -1,0 +1,232 @@
+---
+name: Validate Release Manifests
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'releases/**/*.yaml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'releases/**/*.yaml'
+
+jobs:
+  validate-structure:
+    name: Validate Manifest Structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install yq and yamllint
+        run: |
+          pip install yamllint
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate YAML syntax
+        run: yamllint -c .yamllint releases/
+
+      - name: Validate manifest structure
+        run: |
+          for manifest in releases/release-*.yaml; do
+            if [ -f "$manifest" ]; then
+              echo "Validating $manifest..."
+              
+              # Check required fields
+              python3 << EOF
+import yaml
+import sys
+
+with open('$manifest') as f:
+    m = yaml.safe_load(f)
+    
+required_fields = ['version', 'components']
+missing = [f for f in required_fields if f not in m]
+
+if missing:
+    print(f"❌ Missing required fields: {missing}")
+    sys.exit(1)
+
+required_components = ['aap_configuration', 'collections', 'execution_environment']
+missing_components = [c for c in required_components if c not in m.get('components', {})]
+
+if missing_components:
+    print(f"❌ Missing required components: {missing_components}")
+    sys.exit(1)
+
+print("✅ Manifest structure valid")
+EOF
+            fi
+          done
+
+  validate-versions:
+    name: Validate Version Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Check semantic versioning
+        run: |
+          for manifest in releases/release-v*.yaml; do
+            if [ -f "$manifest" ]; then
+              version=$(yq eval '.version' "$manifest")
+              
+              if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+                echo "❌ Invalid version format: $version in $manifest"
+                echo "Must follow semver: x.y.z or x.y.z-prerelease"
+                exit 1
+              fi
+              
+              echo "✅ Valid version: $version"
+            fi
+          done
+
+      - name: Check for duplicate versions
+        run: |
+          versions=()
+          for manifest in releases/release-v*.yaml; do
+            if [ -f "$manifest" ]; then
+              version=$(yq eval '.version' "$manifest")
+              
+              if [[ " ${versions[@]} " =~ " ${version} " ]]; then
+                echo "❌ Duplicate version found: $version"
+                exit 1
+              fi
+              
+              versions+=("$version")
+            fi
+          done
+          
+          echo "✅ No duplicate versions found"
+
+  validate-commit-shas:
+    name: Validate Commit SHAs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check commit SHA format
+        run: |
+          for manifest in releases/release-*.yaml; do
+            if [ -f "$manifest" ]; then
+              echo "Checking commit SHAs in $manifest..."
+              
+              # Extract commit SHAs and validate format (40 hex chars)
+              if grep -E "commit:" "$manifest" | grep -v "^#"; then
+                if ! grep -E "commit:\s*\"?[a-f0-9]{40}\"?" "$manifest" > /dev/null; then
+                  echo "⚠️  WARNING: Commit SHAs should be 40 character hex strings"
+                fi
+              fi
+            fi
+          done
+
+  validate-image-digests:
+    name: Validate Image Digests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check image digest format
+        run: |
+          for manifest in releases/release-*.yaml; do
+            if [ -f "$manifest" ]; then
+              echo "Checking image digests in $manifest..."
+              
+              # Check for sha256: format
+              if grep -E "digest:" "$manifest" | grep -v "^#"; then
+                if ! grep -E "digest:\s*\"?sha256:[a-f0-9]{64}\"?" "$manifest" > /dev/null; then
+                  echo "⚠️  WARNING: Image digests should be sha256:... format"
+                fi
+              fi
+            fi
+          done
+
+  check-production-safety:
+    name: Production Safety Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for latest/main/master in production releases
+        run: |
+          for manifest in releases/release-v*.yaml releases/release-prod*.yaml; do
+            if [ -f "$manifest" ]; then
+              echo "Checking $manifest for production safety..."
+              
+              if grep -iE "latest|:main\b|:master\b" "$manifest" | grep -v "^#" | grep -v "branch:"; then
+                echo "❌ VIOLATION: Cannot use latest/main/master in versioned release"
+                echo "File: $manifest"
+                echo "Constitution Article III: Atomic Promotion requires locked versions"
+                exit 1
+              fi
+              
+              echo "✅ No latest/main/master references found"
+            fi
+          done
+
+  validate-scripts:
+    name: Validate Helper Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Validate shell scripts
+        run: |
+          for script in scripts/*.sh; do
+            if [ -f "$script" ]; then
+              echo "Validating $script..."
+              shellcheck "$script" || true
+            fi
+          done
+
+      - name: Test scripts exist
+        run: |
+          required_scripts=("create-manifest.sh" "validate-manifest.sh" "promote.sh")
+          for script in "${required_scripts[@]}"; do
+            if [ ! -f "scripts/$script" ]; then
+              echo "⚠️  WARNING: Expected script not found: scripts/$script"
+            else
+              echo "✅ Found scripts/$script"
+            fi
+          done
+
+  pr-summary:
+    name: Generate PR Summary
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: [validate-structure, validate-versions, validate-commit-shas, validate-image-digests, check-production-safety]
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Release Manifest Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Manifest Structure | ${{ needs.validate-structure.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version Format | ${{ needs.validate-versions.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit SHAs | ${{ needs.validate-commit-shas.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Digests | ${{ needs.validate-image-digests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production Safety | ${{ needs.check-production-safety.result }} |" >> $GITHUB_STEP_SUMMARY
+
+
+

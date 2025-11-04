@@ -1,0 +1,256 @@
+---
+# Pre-commit hooks for automation-release-manifest repository
+# Release manifests for atomic promotion
+#
+# Installation:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually:
+#   pre-commit run --all-files
+
+repos:
+  # ============================================================================
+  # General Checks - All Files
+  # ============================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Prevent large files from being committed
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+        
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+        
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        args: ['--markdown-linebreak-ext=md']
+        
+      # Verify YAML syntax
+      - id: check-yaml
+        
+      # Check for merge conflict markers
+      - id: check-merge-conflict
+        
+      # Prevent committing to main/master directly
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+        
+      # Check case conflicts
+      - id: check-case-conflict
+        
+      # Ensure scripts have proper shebang
+      - id: check-executables-have-shebangs
+
+  # ============================================================================
+  # YAML Linting
+  # ============================================================================
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        args:
+          - '--config-file=.yamllint'
+        files: \.(yaml|yml)$
+
+  # ============================================================================
+  # Security Scanning - Secrets Detection
+  # ============================================================================
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args:
+          - '--baseline'
+          - '.secrets.baseline'
+        exclude: |
+          (?x)^(
+            \.secrets\.baseline
+          )$
+
+  # ============================================================================
+  # GitLeaks - Additional Secrets Detection
+  # ============================================================================
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+
+  # ============================================================================
+  # Markdown Linting
+  # ============================================================================
+  - repo: https://github.com/markdownlint/markdownlint
+    rev: v0.12.0
+    hooks:
+      - id: markdownlint
+        args: ['--rules', '~MD013,~MD033']
+
+  # ============================================================================
+  # Shell Script Linting
+  # ============================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['--severity=warning']
+        files: ^scripts/.*\.sh$
+
+  # ============================================================================
+  # Manifest Structure Validation
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: manifest-structure
+        name: Manifest Structure Check
+        entry: bash -c 'if [ ! -d releases ]; then echo "❌ releases/ directory not found"; exit 1; fi; if [ ! -d scripts ]; then echo "❌ scripts/ directory not found"; exit 1; fi; if [ ! -d templates ]; then echo "❌ templates/ directory not found"; exit 1; fi; echo "✅ Manifest structure valid"'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # ============================================================================
+  # Release Manifest Validation
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: manifest-validation
+        name: Release Manifest Validation
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/release-*.yaml ]]; then echo "Validating manifest: $f"; python3 -c "import yaml,sys; m=yaml.safe_load(open(\"$f\")); assert \"version\" in m, \"Missing version\"; assert \"components\" in m, \"Missing components\"; assert \"aap_configuration\" in m[\"components\"], \"Missing aap_configuration\"; assert \"collections\" in m[\"components\"], \"Missing collections\"; assert \"execution_environment\" in m[\"components\"], \"Missing execution_environment\"" || { echo "❌ Invalid manifest: $f"; exit 1; }; echo "✅ Valid manifest: $f"; fi; done'
+        language: system
+        files: ^releases/release-.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # Commit SHA Validation
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: commit-sha-format
+        name: Commit SHA Format Check
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/release-*.yaml ]]; then if grep -E "commit:\s*\"?[a-f0-9]{40}\"?" "$f" > /dev/null; then echo "✅ Valid commit SHAs in $f"; else echo "⚠️  WARNING: Commit SHAs should be 40 character hex strings in $f"; fi; fi; done'
+        language: system
+        files: ^releases/release-.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # Image Digest Validation
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: image-digest-check
+        name: Image Digest Validation
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/release-*.yaml ]]; then if grep -E "digest:\s*\"?sha256:[a-f0-9]{64}\"?" "$f" > /dev/null; then echo "✅ Valid image digests in $f"; else echo "⚠️  WARNING: Image digests should be sha256:... format in $f"; fi; fi; done'
+        language: system
+        files: ^releases/release-.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # Semantic Versioning Check
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: semantic-version
+        name: Semantic Version Check
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/release-*.yaml ]]; then version=$(grep "^version:" "$f" | awk "{print \$2}" | tr -d "\""); if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]] && [[ "$version" != "dev" ]]; then echo "⚠️  WARNING: Version should follow semver (x.y.z) in $f: $version"; fi; fi; done'
+        language: system
+        files: ^releases/release-.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # No Latest Tags
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: no-latest-tags
+        name: No Latest Tags in Releases
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/release-v*.yaml ]] || [[ "$f" == releases/release-prod*.yaml ]]; then if grep -i "latest\|main\|master" "$f" | grep -v "^#" | grep -v "branch:"; then echo "❌ VIOLATION: Cannot use latest/main/master in versioned release: $f"; echo "Constitution Article III: Atomic Promotion requires locked versions"; exit 1; fi; fi; done'
+        language: system
+        files: ^releases/release-.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # Filename Convention
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: filename-convention
+        name: Release Filename Convention
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/* ]]; then basename=$(basename "$f"); if [[ ! "$basename" =~ ^release-(v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?|dev|qa|prod)\.yaml$ ]]; then echo "⚠️  WARNING: Release filename should be release-v1.2.3.yaml or release-dev.yaml: $basename"; fi; fi; done'
+        language: system
+        files: ^releases/.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # Created Timestamp Check
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: timestamp-format
+        name: Timestamp Format Check
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/release-*.yaml ]]; then if grep -E "(created|deployed|validated_at|approved_at):" "$f" | grep -v "null" | grep -v "^#" > /dev/null; then if ! grep -E "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z" "$f" > /dev/null; then echo "⚠️  WARNING: Timestamps should be ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ) in $f"; fi; fi; fi; done'
+        language: system
+        files: ^releases/release-.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # Script Validation
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: script-validation
+        name: Helper Scripts Validation
+        entry: bash -c 'required_scripts=("create-manifest.sh" "validate-manifest.sh" "promote.sh"); for script in "${required_scripts[@]}"; do if [ ! -f "scripts/$script" ]; then echo "⚠️  WARNING: Expected script not found: scripts/$script"; fi; done'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # ============================================================================
+  # Constitutional Compliance
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: no-secrets
+        name: No Secrets in Manifests
+        entry: bash -c 'echo "Checking for secrets..."; for f in "$@"; do if grep -iE "(password|secret|token|api[_-]?key):\s*[\"'\''][^{]" "$f" | grep -v "^#"; then echo "❌ VIOLATION: Possible secret in $f"; echo "Constitution Article V: No secrets in Git"; exit 1; fi; done; echo "✅ No secrets detected"'
+        language: system
+        files: \.(yaml|yml)$
+        pass_filenames: true
+
+  # ============================================================================
+  # Environment Consistency Check
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: environment-consistency
+        name: Environment Consistency Check
+        entry: bash -c 'for f in "$@"; do if [[ "$f" == releases/release-*.yaml ]]; then python3 -c "import yaml; m=yaml.safe_load(open(\"$f\")); envs=m.get(\"environments\",{}); expected=[\"qa\",\"prod\"]; missing=[e for e in expected if e not in envs]; [print(f\"⚠️  WARNING: Missing environment section: {e}\") for e in missing]" 2>/dev/null || true; fi; done'
+        language: system
+        files: ^releases/release-.*\.yaml$
+        pass_filenames: true
+
+  # ============================================================================
+  # Duplicate Version Check
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: duplicate-version
+        name: Duplicate Version Check
+        entry: bash -c 'versions=(); for f in releases/release-v*.yaml; do [ -f "$f" ] || continue; version=$(grep "^version:" "$f" | awk "{print \$2}" | tr -d "\""); if [[ " ${versions[@]} " =~ " ${version} " ]]; then echo "❌ VIOLATION: Duplicate version found: $version"; echo "Each release must have unique version"; exit 1; fi; versions+=("$version"); done'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # ============================================================================
+  # Documentation Check
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: readme-check
+        name: README Exists Check
+        entry: bash -c 'if [ ! -f README.md ]; then echo "❌ README.md not found"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+
+

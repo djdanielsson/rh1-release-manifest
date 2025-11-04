@@ -1,36 +1,120 @@
-# Release Manifest Repository - GitIgnore
+# Release Manifest .gitignore
+# Temporary files and build artifacts
 
-# Temporary files
-*.tmp
-*.temp
-.tmp/
-
-# Editor files
+# IDE / Editor
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
 .DS_Store
+.project
+.settings/
+.classpath
 
-# IDE
-.vscode/
-.idea/
+# Release artifacts (draft/work-in-progress)
+releases/draft/
+releases/wip/
+*.draft.yaml
+*.wip.yaml
+
+# Validation output
+validation-output/
+*.validation
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
 
-# Logs
+# Testing
+.pytest_cache/
+test-results/
+test-output/
+
+# Pre-commit
+.pre-commit-config.yaml.backup
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
 *.log
+*.bak
+*.backup
 
-# Secrets (should never be in manifests anyway)
-*.key
-*.pem
-*password*
+# Generated manifests during development
+*.generated.yaml
+*.auto.yaml
+
+# Script outputs
+scripts/output/
+*.script-output
+
+# macOS
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Local overrides
+*.local
+*.local.*
+local-*
+override-*
+
+# Secrets (manifests should reference, not contain secrets)
 *secret*
+*password*
 *token*
+*.key
+*.crt
+*.pem
 
-# Build artifacts
-build/
-dist/
+# Keep templates
+!templates/**
 
+# Keep released manifests (these should be committed)
+!releases/release-*.yaml
+!releases/release-*.yml
+
+# Documentation build artifacts
+docs/_build/
+site/
+
+# JSON Schema validation cache
+.schema-cache/
+
+# CI/CD local test runs
+.github/workflows/*.local.yml
+
+# Diff outputs during comparison
+*.diff
+*.patch
+
+# Keep important files
+!README.md
+!scripts/**/*.sh
+!.yamllint

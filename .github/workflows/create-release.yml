@@ -1,0 +1,196 @@
+---
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.0.0)'
+        required: true
+      aap_config_commit:
+        description: 'AAP config commit SHA (40 chars)'
+        required: true
+      collection_commit:
+        description: 'Collection commit SHA (40 chars)'
+        required: true
+      ee_image_digest:
+        description: 'EE image digest (sha256:...)'
+        required: true
+
+jobs:
+  validate-inputs:
+    name: Validate Release Inputs
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - name: Get version
+        id: get-version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION=${{ github.event.inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Validate version format
+        run: |
+          VERSION=${{ steps.get-version.outputs.version }}
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Must follow semver: x.y.z or x.y.z-prerelease"
+            exit 1
+          fi
+          echo "✅ Valid version format"
+
+      - name: Validate commit SHAs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          AAP_SHA="${{ github.event.inputs.aap_config_commit }}"
+          COLL_SHA="${{ github.event.inputs.collection_commit }}"
+          
+          if [[ ! "$AAP_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "❌ Invalid AAP config commit SHA: $AAP_SHA"
+            exit 1
+          fi
+          
+          if [[ ! "$COLL_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "❌ Invalid collection commit SHA: $COLL_SHA"
+            exit 1
+          fi
+          
+          echo "✅ Valid commit SHAs"
+
+      - name: Validate image digest
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          DIGEST="${{ github.event.inputs.ee_image_digest }}"
+          
+          if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "❌ Invalid image digest: $DIGEST"
+            echo "Must be in format: sha256:..."
+            exit 1
+          fi
+          
+          echo "✅ Valid image digest"
+
+  create-manifest:
+    name: Create Release Manifest
+    runs-on: ubuntu-latest
+    needs: validate-inputs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create manifest file
+        run: |
+          VERSION="${{ needs.validate-inputs.outputs.version }}"
+          MANIFEST="releases/release-v${VERSION}.yaml"
+          
+          if [ -f "$MANIFEST" ]; then
+            echo "❌ Manifest already exists: $MANIFEST"
+            exit 1
+          fi
+          
+          cat > "$MANIFEST" << 'EOF'
+---
+version: "${{ needs.validate-inputs.outputs.version }}"
+created: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+created_by: "${{ github.actor }}"
+description: "Release ${{ needs.validate-inputs.outputs.version }}"
+
+components:
+  aap_configuration:
+    repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
+    commit: "${{ github.event.inputs.aap_config_commit || 'UPDATE_ME' }}"
+    branch: "main"
+  
+  collections:
+    repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
+    commit: "${{ github.event.inputs.collection_commit || 'UPDATE_ME' }}"
+    branch: "main"
+  
+  execution_environment:
+    registry: "quay.io"
+    repository: "myorg/custom-ee"
+    tag: "${{ needs.validate-inputs.outputs.version }}"
+    digest: "${{ github.event.inputs.ee_image_digest || 'UPDATE_ME' }}"
+
+environments:
+  qa:
+    deployed: null
+    validated: false
+    validated_by: null
+  
+  prod:
+    deployed: null
+    validated: false
+    validated_by: null
+
+validation:
+  tests_passed: []
+  approval_required: true
+  approved_by: null
+  approved_at: null
+EOF
+          
+          echo "✅ Created manifest: $MANIFEST"
+
+      - name: Validate manifest
+        run: |
+          VERSION="${{ needs.validate-inputs.outputs.version }}"
+          MANIFEST="releases/release-v${VERSION}.yaml"
+          
+          python3 << EOF
+import yaml
+with open('$MANIFEST') as f:
+    m = yaml.safe_load(f)
+    assert 'version' in m
+    assert 'components' in m
+    print("✅ Manifest valid")
+EOF
+
+      - name: Commit and push manifest
+        run: |
+          VERSION="${{ needs.validate-inputs.outputs.version }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add releases/release-v${VERSION}.yaml
+          git commit -m "Release v${VERSION}"
+          git push
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.validate-inputs.outputs.version }}
+          name: Release v${{ needs.validate-inputs.outputs.version }}
+          body: |
+            ## Release v${{ needs.validate-inputs.outputs.version }}
+            
+            ### Components
+            - **AAP Configuration**: `${{ github.event.inputs.aap_config_commit }}`
+            - **Collection**: `${{ github.event.inputs.collection_commit }}`
+            - **Execution Environment**: `${{ github.event.inputs.ee_image_digest }}`
+            
+            ### Release Manifest
+            See `releases/release-v${{ needs.validate-inputs.outputs.version }}.yaml`
+            
+            ### Deployment
+            This release can be deployed using the promotion pipeline.
+            
+            ### Constitutional Compliance
+            - ✅ Article III: All components version-locked atomically
+            - ✅ Full commit SHAs used (not branch names)
+            - ✅ Image digest specified (not tag)
+          draft: false
+          prerelease: false
+
+
+
