@@ -1,0 +1,201 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: rollback
+  labels:
+    app.kubernetes.io/component: release-management
+spec:
+  description: |
+    Rolls back an environment to a previous release version.
+  params:
+    - name: TARGET_VERSION
+      type: string
+      description: Version to roll back to
+    - name: ENVIRONMENT
+      type: string
+      description: Target environment (dev, qa, prod)
+    - name: REASON
+      type: string
+      description: Reason for rollback
+      default: "Manual rollback requested"
+  workspaces:
+    - name: source
+      description: Workspace containing the release-manifest repo
+    - name: aap-config
+      description: Workspace for aap-config-as-code checkout
+  results:
+    - name: previous-version
+      description: Version that was replaced
+    - name: rollback-time
+      description: Timestamp of rollback
+  steps:
+    - name: validate-target
+      image: quay.io/centos/centos:stream9-minimal
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        
+        # Install yq
+        curl -sL https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 -o /usr/local/bin/yq
+        chmod +x /usr/local/bin/yq
+        
+        TARGET_MANIFEST="$(workspaces.source.path)/releases/release-$(params.TARGET_VERSION).yaml"
+        
+        if [ ! -f "$TARGET_MANIFEST" ]; then
+          echo "❌ Error: Target release manifest not found: $TARGET_MANIFEST"
+          echo "Available releases:"
+          ls -la $(workspaces.source.path)/releases/
+          exit 1
+        fi
+        
+        # Check if target version was previously deployed to this environment
+        DEPLOYED=$(yq eval ".environments.$(params.ENVIRONMENT).deployed" "$TARGET_MANIFEST")
+        
+        if [ "$DEPLOYED" == "null" ]; then
+          echo "⚠️  Warning: Version $(params.TARGET_VERSION) was never deployed to $(params.ENVIRONMENT)"
+          echo "Proceeding anyway..."
+        else
+          echo "✅ Target version was previously deployed at: $DEPLOYED"
+        fi
+        
+        # Get current version (find most recent deployed version)
+        echo "Finding current deployed version..."
+        CURRENT=""
+        CURRENT_TIME=""
+        for manifest in $(workspaces.source.path)/releases/release-*.yaml; do
+          if [ -f "$manifest" ]; then
+            DEP_TIME=$(yq eval ".environments.$(params.ENVIRONMENT).deployed" "$manifest")
+            if [ "$DEP_TIME" != "null" ]; then
+              VERSION=$(yq eval ".version" "$manifest")
+              if [ -z "$CURRENT_TIME" ] || [[ "$DEP_TIME" > "$CURRENT_TIME" ]]; then
+                CURRENT="$VERSION"
+                CURRENT_TIME="$DEP_TIME"
+              fi
+            fi
+          fi
+        done
+        
+        if [ -n "$CURRENT" ]; then
+          echo "Current version: $CURRENT (deployed at $CURRENT_TIME)"
+          echo "$CURRENT" > $(results.previous-version.path)
+        else
+          echo "No current version found"
+          echo "none" > $(results.previous-version.path)
+        fi
+
+    - name: get-commit-info
+      image: quay.io/centos/centos:stream9-minimal
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        
+        # Install yq
+        curl -sL https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 -o /usr/local/bin/yq
+        chmod +x /usr/local/bin/yq
+        
+        TARGET_MANIFEST="$(workspaces.source.path)/releases/release-$(params.TARGET_VERSION).yaml"
+        
+        AAP_COMMIT=$(yq eval '.components.aap_configuration.commit' "$TARGET_MANIFEST")
+        echo "$AAP_COMMIT" > /tekton/home/aap-commit
+
+    - name: checkout-aap-config
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        
+        AAP_COMMIT=$(cat /tekton/home/aap-commit)
+        
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║  Rolling back $(params.ENVIRONMENT) to $(params.TARGET_VERSION)"
+        echo "║  Commit: $AAP_COMMIT"
+        echo "╚════════════════════════════════════════════════════════════╝"
+        
+        cd $(workspaces.aap-config.path)
+        
+        if [ ! -d ".git" ]; then
+          git clone https://github.com/djdanielsson/rh1-aap-config-as-code.git .
+        fi
+        
+        git fetch origin
+        git checkout "$AAP_COMMIT"
+        
+        echo "✅ Checked out: $(git rev-parse HEAD)"
+
+    - name: apply-configuration
+      image: quay.io/ansible/ansible-runner:latest
+      env:
+        - name: CONTROLLER_HOST
+          valueFrom:
+            secretKeyRef:
+              name: aap-$(params.ENVIRONMENT)-credentials
+              key: host
+        - name: CONTROLLER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: aap-$(params.ENVIRONMENT)-credentials
+              key: password
+        - name: CONTROLLER_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: aap-$(params.ENVIRONMENT)-credentials
+              key: username
+              optional: true
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        
+        cd $(workspaces.aap-config.path)
+        
+        # Install collections
+        ansible-galaxy collection install -r collections/requirements.yml
+        
+        # Run playbook for target environment
+        ansible-playbook playbooks/playbook.yml \
+          --limit aap_$(params.ENVIRONMENT) \
+          -e "release_version=$(params.TARGET_VERSION)" \
+          -e "is_rollback=true"
+        
+        echo "✅ Rollback configuration applied"
+        
+        date -u +%Y-%m-%dT%H:%M:%SZ > $(results.rollback-time.path)
+
+    - name: record-rollback
+      image: quay.io/centos/centos:stream9-minimal
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        
+        # Install yq
+        curl -sL https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 -o /usr/local/bin/yq
+        chmod +x /usr/local/bin/yq
+        
+        MANIFEST="$(workspaces.source.path)/releases/release-$(params.TARGET_VERSION).yaml"
+        ROLLBACK_TIME=$(cat $(results.rollback-time.path))
+        PREV_VERSION=$(cat $(results.previous-version.path))
+        
+        echo "Recording rollback in manifest..."
+        
+        # Update deployment timestamp
+        yq eval -i ".environments.$(params.ENVIRONMENT).deployed = \"$ROLLBACK_TIME\"" "$MANIFEST"
+        
+        # Add rollback history entry
+        yq eval -i ".rollback_history += [{
+          \"timestamp\": \"$ROLLBACK_TIME\",
+          \"environment\": \"$(params.ENVIRONMENT)\",
+          \"from_version\": \"$PREV_VERSION\",
+          \"reason\": \"$(params.REASON)\",
+          \"pipeline_run\": \"$(context.pipelineRun.name)\"
+        }]" "$MANIFEST"
+        
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║  ✅ ROLLBACK COMPLETE"
+        echo "║"
+        echo "║  Environment: $(params.ENVIRONMENT)"
+        echo "║  From:        $PREV_VERSION"
+        echo "║  To:          $(params.TARGET_VERSION)"
+        echo "║  Time:        $ROLLBACK_TIME"
+        echo "║  Reason:      $(params.REASON)"
+        echo "╚════════════════════════════════════════════════════════════╝"
+

@@ -1,0 +1,33 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: release-management-pipelines
+  annotations:
+    description: |
+      Tekton pipelines for release management including:
+      - create-release: Create new release manifests
+      - promote: Promote releases between environments
+      - rollback: Rollback to previous versions
+
+resources:
+  # Tasks
+  - tasks/validate-version.yaml
+  - tasks/create-manifest.yaml
+  - tasks/validate-manifest.yaml
+  - tasks/promote-environment.yaml
+  - tasks/rollback.yaml
+
+  # Pipelines
+  - pipelines/create-release.yaml
+  - pipelines/promote.yaml
+  - pipelines/rollback.yaml
+
+  # Triggers
+  - triggers/release-trigger.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: rh1-release-manifest
+  app.kubernetes.io/managed-by: kustomize
+

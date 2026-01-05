@@ -21,44 +21,44 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            
+
             // Get changed files
             const files = await github.rest.pulls.listFiles({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: pr.number
             });
-            
+
             const labels = new Set();
-            
+
             files.data.forEach(file => {
               const path = file.filename;
-              
+
               // Label by type
               if (path.startsWith('releases/')) {
                 labels.add('release-manifest');
-                
+
                 // Check for production release
                 if (path.match(/release-v\d+\.\d+\.\d+\.yaml/)) {
                   labels.add('production-release');
                   labels.add('needs-review');
                   labels.add('high-impact');
                 }
-                
+
                 // Check for dev release
                 if (path.includes('release-dev.yaml')) {
                   labels.add('dev-release');
                 }
               }
-              
+
               if (path.startsWith('scripts/')) labels.add('scripts');
               if (path.startsWith('templates/')) labels.add('templates');
-              
+
               // Label by file type
               if (path.endsWith('.md')) labels.add('documentation');
               if (path.startsWith('.github/')) labels.add('ci/cd');
             });
-            
+
             // Apply labels
             if (labels.size > 0) {
               await github.rest.issues.addLabels({

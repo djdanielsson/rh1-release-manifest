@@ -1,7 +1,7 @@
 # Ansible Release Manifest Repository
 
-**Purpose**: Version-lock all components for atomic promotion  
-**Repository**: https://github.com/djdanielsson/rh1-release-manifest.git  
+**Purpose**: Version-lock all components for atomic promotion
+**Repository**: https://github.com/djdanielsson/rh1-release-manifest.git
 **Pattern**: YAML manifests with Git SHAs and image digests
 
 ## Overview
@@ -34,15 +34,34 @@ automation-release-manifest/
 ├── README.md                       # This file
 ├── .gitignore                      # Git ignore patterns
 ├── releases/                       # Release manifest files
-│   ├── release-v1.0.0.yaml
-│   ├── release-v1.1.0.yaml
-│   └── release-v2.0.0.yaml
+│   ├── release-dev.yaml            # Dev manifest (always HEAD)
+│   └── release-25.01.05.0.yaml     # Versioned releases
+├── schemas/                        # JSON schemas
+│   └── release-manifest-schema.json
 ├── templates/                      # Template manifests
 │   └── release-template.yaml
-└── scripts/                        # Helper scripts
-    ├── create-manifest.sh          # Generate new manifest
+├── tekton/                         # Tekton pipelines (primary workflow)
+│   ├── kustomization.yaml          # Deploy with: oc apply -k tekton/
+│   ├── README.md                   # Tekton usage documentation
+│   ├── tasks/
+│   │   ├── validate-version.yaml   # Validate YY.MM.DD.PATCH format
+│   │   ├── create-manifest.yaml    # Create release manifest
+│   │   ├── validate-manifest.yaml  # Validate manifest structure
+│   │   ├── promote-environment.yaml # Deploy to environment
+│   │   └── rollback.yaml           # Rollback to previous version
+│   ├── pipelines/
+│   │   ├── create-release.yaml     # Full release creation workflow
+│   │   ├── promote.yaml            # Promote between environments
+│   │   └── rollback.yaml           # Rollback pipeline
+│   └── triggers/
+│       └── release-trigger.yaml    # EventListener and templates
+└── scripts/                        # Helper scripts (for local use)
+    ├── generate-version.sh         # Generate YY.MM.DD.PATCH version
+    ├── validate-version.sh         # Validate version format
+    ├── create-release-tag.sh       # Create git release tag
     ├── validate-manifest.sh        # Validate manifest format
-    └── promote.sh                  # Promote to environment
+    ├── validate-manifest-schema.py # Schema validation
+    └── promote.sh                  # Promote to environment (legacy)
 
 ```
 
@@ -64,13 +83,13 @@ components:
     repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
     commit: "abc123def456789..."
     branch: "main"
-  
+
   # Ansible Collection repository
   collections:
     repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
     commit: "def456abc123789..."
     branch: "main"
-  
+
   # Execution Environment image
   execution_environment:
     registry: "quay.io"
@@ -83,7 +102,7 @@ environments:
     deployed: "2025-10-29T11:00:00Z"
     validated: true
     validated_by: "qa-team"
-  
+
   prod:
     deployed: null
     validated: false
@@ -137,50 +156,76 @@ git push origin main
 git push origin v1.0.0
 ```
 
-## Using Manifests in Pipelines
+## Tekton Pipelines
 
-### Promotion Pipeline
+All release, promotion, and rollback workflows are implemented as Tekton pipelines in the `tekton/` directory.
 
-The Tekton promotion pipeline reads the manifest and deploys all components:
+### Deploy Pipelines
 
-```yaml
-# Simplified Tekton pipeline
-apiVersion: tekton.dev/v1beta1
-kind: Pipeline
-metadata:
-  name: promotion-pipeline
-spec:
-  params:
-    - name: MANIFEST_VERSION
-      description: Release manifest version (e.g., v1.0.0)
-  
-  tasks:
-    # 1. Parse manifest
-    - name: parse-manifest
-      taskRef:
-        name: manifest-parser-task
-      params:
-        - name: MANIFEST_VERSION
-          value: $(params.MANIFEST_VERSION)
-    
-    # 2. Deploy AAP config
-    - name: deploy-aap-config
-      runAfter: [parse-manifest]
-      params:
-        - name: COMMIT_SHA
-          value: $(tasks.parse-manifest.results.aap-config-sha)
-    
-    # 3. Build/Deploy EE
-    - name: deploy-ee
-      runAfter: [parse-manifest]
-      params:
-        - name: IMAGE_DIGEST
-          value: $(tasks.parse-manifest.results.ee-digest)
-    
-    # 4. Validate
-    - name: validate-deployment
-      runAfter: [deploy-aap-config, deploy-ee]
+```bash
+# Deploy all Tekton resources to your cluster
+oc apply -k tekton/
 ```
+
+### Create Release Pipeline
+
+Creates a new release manifest by locking component versions:
+
+```bash
+tkn pipeline start create-release \
+  -p VERSION=25.01.05.0 \
+  -p DESCRIPTION="Initial release" \
+  -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
+  -w name=aap-config-source,volumeClaimTemplateFile=pvc-template.yaml \
+  -w name=collection-source,volumeClaimTemplateFile=pvc-template.yaml \
+  -w name=shared-data,emptyDir=""
+```
+
+### Promote Pipeline
+
+Promotes a validated release from one environment to the next:
+
+```bash
+# Dev → QA
+tkn pipeline start promote \
+  -p VERSION=25.01.05.0 \
+  -p FROM_ENVIRONMENT=dev \
+  -p TO_ENVIRONMENT=qa \
+  -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
+  -w name=aap-config,volumeClaimTemplateFile=pvc-template.yaml
+
+# QA → Prod (requires approval)
+tkn pipeline start promote \
+  -p VERSION=25.01.05.0 \
+  -p FROM_ENVIRONMENT=qa \
+  -p TO_ENVIRONMENT=prod \
+  -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
+  -w name=aap-config,volumeClaimTemplateFile=pvc-template.yaml
+```
+
+### Rollback Pipeline
+
+Rolls back an environment to a previous release version:
+
+```bash
+# Rollback QA
+tkn pipeline start rollback \
+  -p TARGET_VERSION=25.01.04.0 \
+  -p ENVIRONMENT=qa \
+  -p REASON="Bug found in 25.01.05.0" \
+  -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
+  -w name=aap-config,volumeClaimTemplateFile=pvc-template.yaml
+
+# Dry-run mode (validate without applying)
+tkn pipeline start rollback \
+  -p TARGET_VERSION=25.01.04.0 \
+  -p ENVIRONMENT=prod \
+  -p DRY_RUN=true \
+  -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
+  -w name=aap-config,volumeClaimTemplateFile=pvc-template.yaml
+```
+
+See `tekton/README.md` for complete documentation
 
 ## Workflow Examples
 
@@ -268,67 +313,92 @@ environments:
     validated: true
 ```
 
+### Rollback Process
+
+Rollback is implemented as a dedicated Tekton pipeline that:
+
+1. Validates the target version exists
+2. Extracts component versions from the target manifest
+3. Checks out the exact AAP configuration commit
+4. Applies configuration to the target environment
+5. Records rollback history in the manifest
+
+```bash
+# Rollback prod to previous version
+tkn pipeline start rollback \
+  -p TARGET_VERSION=25.01.04.0 \
+  -p ENVIRONMENT=prod \
+  -p REASON="Critical bug in 25.01.05.0"
+```
+
+See `tekton/pipelines/rollback.yaml` for implementation details.
+
 ## Helper Scripts
 
-### create-manifest.sh
+### Version Management Scripts
+
+#### generate-version.sh
+
+Generates current version in YY.MM.DD.PATCH format:
 
 ```bash
 #!/bin/bash
-# Create a new release manifest
+# Generate version string in YY.MM.DD.PATCH format
 
-VERSION=$1
-if [ -z "$VERSION" ]; then
-  echo "Usage: $0 <version>"
-  exit 1
-fi
+PATCH=${1:-0}
+VERSION=$(date +"%y.%m.%d").${PATCH}
+echo "${VERSION}"
 
-# Get component versions
-AAP_CONFIG_SHA=$(cd ../aap-config-as-code && git rev-parse HEAD)
-COLLECTION_SHA=$(cd ../automation-collection-example && git rev-parse HEAD)
-EE_DIGEST=$(podman inspect quay.io/myorg/custom-ee:latest --format='{{.Digest}}')
-
-# Create manifest from template
-cat > releases/release-${VERSION}.yaml <<EOF
----
-version: "${VERSION}"
-created: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-created_by: "${USER}"
-description: "Release ${VERSION}"
-
-components:
-  aap_configuration:
-    repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
-    commit: "${AAP_CONFIG_SHA}"
-    branch: "main"
-  
-  collections:
-    repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
-    commit: "${COLLECTION_SHA}"
-    branch: "main"
-  
-  execution_environment:
-    registry: "quay.io"
-    repository: "myorg/custom-ee"
-    tag: "${VERSION}"
-    digest: "${EE_DIGEST}"
-
-environments:
-  qa:
-    deployed: null
-    validated: false
-  prod:
-    deployed: null
-    validated: false
-
-validation:
-  tests_passed: []
-  approval_required: true
-  approved_by: null
-  approved_at: null
-EOF
-
-echo "Created releases/release-${VERSION}.yaml"
+# Usage:
+./scripts/generate-version.sh     # Output: 25.01.05.0
+./scripts/generate-version.sh 1   # Output: 25.01.05.1
 ```
+
+#### validate-version.sh
+
+Validates version format:
+
+```bash
+#!/bin/bash
+# Validate version string format: YY.MM.DD.PATCH
+
+./scripts/validate-version.sh 25.01.05.0    # ✅ Valid
+./scripts/validate-version.sh 25.1.5.0      # ❌ Invalid (missing leading zeros)
+```
+
+#### create-release-tag.sh
+
+Interactive tool to create git release tags:
+
+```bash
+#!/bin/bash
+# Create a release tag with proper format
+
+./scripts/create-release-tag.sh         # Create 25.01.05.0
+./scripts/create-release-tag.sh 1       # Create 25.01.05.1 (hotfix)
+./scripts/create-release-tag.sh 0 "Release message"
+```
+
+### Manifest Creation (Tekton)
+
+The preferred method to create manifests is via the Tekton pipeline:
+
+```bash
+tkn pipeline start create-release \
+  -p VERSION=25.01.05.0 \
+  -p DESCRIPTION="Release description"
+```
+
+This pipeline:
+1. Validates version format (YY.MM.DD.PATCH)
+2. Clones aap-config-as-code and gets HEAD SHA
+3. Clones collection repo and gets HEAD SHA
+4. Gets EE image digest via skopeo
+5. Creates the release manifest YAML
+6. Validates manifest structure
+7. Commits and tags the release
+
+See `tekton/tasks/create-manifest.yaml` for implementation.
 
 ### validate-manifest.sh
 
@@ -364,18 +434,41 @@ done
 echo "✓ Manifest validation passed"
 ```
 
+## Secrets Management
+
+All secrets are managed via **HashiCorp Vault**:
+
+```yaml
+# Vault paths for release automation
+secret/data/release-manifest:
+  github-token: "<token-for-git-operations>"
+  
+secret/data/aap-dev:
+  controller_host: "https://aap-dev.apps.cluster.example.com"
+  controller_password: "<from-vault>"
+  
+secret/data/aap-qa:
+  controller_host: "https://aap-qa.apps.cluster.example.com"
+  controller_password: "<from-vault>"
+  
+secret/data/aap-prod:
+  controller_host: "https://aap-prod.apps.cluster.example.com"
+  controller_password: "<from-vault>"
+```
+
 ## Best Practices
 
-### 1. Semantic Versioning
+### 1. CalVer Versioning (YY.MM.DD.PATCH)
 
-Follow semantic versioning for manifest versions:
+This platform uses Calendar Versioning:
 
 ```
-v1.0.0 - Major.Minor.Patch
-v1.0.1 - Patch: Bug fixes only
-v1.1.0 - Minor: New features, backward compatible
-v2.0.0 - Major: Breaking changes
+25.01.05.0 - January 5, 2025, initial release
+25.01.05.1 - January 5, 2025, hotfix 1
+25.01.06.0 - January 6, 2025, new release
 ```
+
+See [VERSIONING-STRATEGY.md](../docs/VERSIONING-STRATEGY.md) for complete details.
 
 ### 2. Always Use Git SHAs
 
@@ -460,35 +553,50 @@ oc logs -n dev-tools deployment/manifest-parser
 
 ## Integration with CI/CD
 
-### Automatic Manifest Creation
+### Tekton EventListener (Recommended)
+
+Trigger pipelines via HTTP POST to the EventListener:
+
+```bash
+# Create a new release
+curl -X POST http://el-release-management-listener:8080 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "create-release",
+    "version": "25.01.05.0",
+    "description": "Initial release"
+  }'
+
+# Promote a release
+curl -X POST http://el-release-management-listener:8080 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "promote",
+    "version": "25.01.05.0",
+    "from_environment": "dev",
+    "to_environment": "qa"
+  }'
+
+# Rollback
+curl -X POST http://el-release-management-listener:8080 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "rollback",
+    "version": "25.01.04.0",
+    "environment": "qa",
+    "reason": "Bug found"
+  }'
+```
+
+### ArgoCD Integration
+
+The Tekton pipelines can be deployed via ArgoCD from the cluster-config repository:
 
 ```yaml
-# GitHub Actions example
-name: Create Release Manifest
-on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.0.0)'
-        required: true
-
-jobs:
-  create-manifest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Create manifest
-        run: |
-          ./scripts/create-manifest.sh ${{ github.event.inputs.version }}
-      
-      - name: Commit manifest
-        run: |
-          git add releases/
-          git commit -m "Release ${{ github.event.inputs.version }}"
-          git tag ${{ github.event.inputs.version }}
-          git push origin main
-          git push origin ${{ github.event.inputs.version }}
+# cluster-config/applications/release-management-ci/kustomization.yaml
+resources:
+  - ../../base/namespace.yaml
+  - https://github.com/djdanielsson/rh1-release-manifest//tekton?ref=main
 ```
 
 ## Manifest Versioning Strategy
@@ -537,7 +645,7 @@ version: "1.0.0"
 
 ---
 
-**Last Updated**: 2025-10-29  
-**Maintained By**: Platform Team  
+**Last Updated**: 2025-10-29
+**Maintained By**: Platform Team
 **Questions**: File issue in this repository
 

@@ -97,37 +97,37 @@ def validate_image_digest(digest: str) -> bool:
 def additional_validations(manifest: Dict[str, Any]) -> List[str]:
     """
     Perform additional validations beyond JSON schema.
-    
+
     Constitutional Compliance:
     - Ensures all components have proper versioning
     - Validates security scan results for production
     - Checks approval requirements
     """
     warnings = []
-    
+
     # Check environment-specific requirements
     environment = manifest.get('metadata', {}).get('environment', '')
-    
+
     # Production-specific validations (Article IV: Production-Grade Quality)
     if environment == 'prod':
         spec = manifest.get('spec', {})
-        
+
         # Check for security scan
         if 'securityScan' not in spec:
             warnings.append("⚠️  Production release missing security scan results")
         elif not spec['securityScan'].get('passed', False):
             warnings.append("⚠️  Production release has failing security scan")
-        
+
         # Check for approvals (Article II: Separation of Duties)
         if 'approvals' not in spec or len(spec['approvals']) == 0:
             warnings.append("⚠️  Production release missing approvals")
-        
+
         # Check for test results
         if 'tests' not in spec:
             warnings.append("⚠️  Production release missing test results")
         elif not spec['tests'].get('passed', False):
             warnings.append("⚠️  Production release has failing tests")
-    
+
     # Validate component versions
     for component in manifest.get('spec', {}).get('components', []):
         version = component.get('version', '')
@@ -136,7 +136,7 @@ def additional_validations(manifest: Dict[str, Any]) -> List[str]:
                 f"⚠️  Component '{component.get('name')}' has invalid "
                 f"semantic version: {version}"
             )
-        
+
         # Validate commit SHA if present
         commit_sha = component.get('commitSha', '')
         if commit_sha and not validate_commit_sha(commit_sha):
@@ -144,7 +144,7 @@ def additional_validations(manifest: Dict[str, Any]) -> List[str]:
                 f"⚠️  Component '{component.get('name')}' has invalid "
                 f"commit SHA: {commit_sha}"
             )
-        
+
         # Validate image digest if present (for EEs)
         image_digest = component.get('imageDigest', '')
         if image_digest and not validate_image_digest(image_digest):
@@ -152,21 +152,21 @@ def additional_validations(manifest: Dict[str, Any]) -> List[str]:
                 f"⚠️  Component '{component.get('name')}' has invalid "
                 f"image digest: {image_digest}"
             )
-    
+
     # Check for rollback target in production
     if environment == 'prod':
         if 'rollbackTarget' not in manifest.get('spec', {}):
             warnings.append(
                 "⚠️  Production release should specify rollbackTarget"
             )
-    
+
     return warnings
 
 
 def validate_manifest_file(manifest_path: Path, schema_path: Path, verbose: bool = False) -> bool:
     """
     Validate a manifest file against the schema.
-    
+
     Returns:
         True if validation passes, False otherwise
     """
@@ -174,16 +174,16 @@ def validate_manifest_file(manifest_path: Path, schema_path: Path, verbose: bool
     print(f"Manifest: {manifest_path}")
     print(f"Schema:   {schema_path}")
     print()
-    
+
     # Load schema and manifest
     schema = load_schema(schema_path)
     manifest = load_manifest(manifest_path)
-    
+
     if verbose:
         print(f"{Colors.BLUE}Manifest content:{Colors.RESET}")
         print(yaml.dump(manifest, default_flow_style=False))
         print()
-    
+
     # Validate against JSON schema
     try:
         validate(instance=manifest, schema=schema)
@@ -201,23 +201,23 @@ def validate_manifest_file(manifest_path: Path, schema_path: Path, verbose: bool
         print(f"{Colors.RED}❌ Schema itself is invalid:{Colors.RESET}")
         print(f"   {e.message}")
         return False
-    
+
     # Perform additional validations
     warnings = additional_validations(manifest)
     if warnings:
         print(f"\n{Colors.YELLOW}⚠️  Additional warnings:{Colors.RESET}")
         for warning in warnings:
             print(f"   {warning}")
-    
+
     # Summary
     print(f"\n{Colors.GREEN}{Colors.BOLD}✅ Validation complete!{Colors.RESET}")
     print(f"Environment: {manifest.get('metadata', {}).get('environment', 'unknown')}")
     print(f"Version:     {manifest.get('metadata', {}).get('version', 'unknown')}")
     print(f"Components:  {len(manifest.get('spec', {}).get('components', []))}")
-    
+
     if warnings:
         print(f"\n{Colors.YELLOW}Note: Warnings do not fail validation but should be reviewed.{Colors.RESET}")
-    
+
     return True
 
 
@@ -249,12 +249,12 @@ Examples:
         action='store_true',
         help='Enable verbose output'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Validate manifest
     success = validate_manifest_file(args.manifest, args.schema, args.verbose)
-    
+
     sys.exit(0 if success else 1)
 
 

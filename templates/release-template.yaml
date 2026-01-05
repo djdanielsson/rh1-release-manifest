@@ -14,14 +14,14 @@ components:
     commit: "full-40-character-git-sha"
     branch: "main"
     notes: "Description of AAP config changes"
-  
+
   # Ansible Collection repository
   collections:
     repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
     commit: "full-40-character-git-sha"
     branch: "main"
     notes: "Description of collection changes"
-  
+
   # Execution Environment image
   execution_environment:
     registry: "quay.io"
@@ -37,7 +37,7 @@ environments:
     validated_by: null  # Username of validator
     validated_at: null  # ISO 8601 timestamp
     notes: ""
-  
+
   prod:
     deployed: null
     validated: false
@@ -51,9 +51,9 @@ validation:
     - smoke-tests
     - integration-tests
     - security-scan
-  
+
   tests_passed: []  # Populate as tests complete
-  
+
   # Approval workflow
   approval_required: true
   approved_by: null  # Username of approver
@@ -65,11 +65,11 @@ metadata:
   jira_ticket: ""
   pull_requests: []
   documentation: ""
-  
+
   # Rollback information
   rollback_tested: false
   rollback_procedure: ""
-  
+
   # Known issues
   known_issues: []
   workarounds: []

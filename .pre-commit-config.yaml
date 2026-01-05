@@ -19,27 +19,27 @@ repos:
       # Prevent large files from being committed
       - id: check-added-large-files
         args: ['--maxkb=500']
-        
+
       # Ensure files end with newline
       - id: end-of-file-fixer
-        
+
       # Remove trailing whitespace
       - id: trailing-whitespace
         args: ['--markdown-linebreak-ext=md']
-        
+
       # Verify YAML syntax
       - id: check-yaml
-        
+
       # Check for merge conflict markers
       - id: check-merge-conflict
-        
+
       # Prevent committing to main/master directly
       - id: no-commit-to-branch
         args: ['--branch', 'main', '--branch', 'master']
-        
+
       # Check case conflicts
       - id: check-case-conflict
-        
+
       # Ensure scripts have proper shebang
       - id: check-executables-have-shebangs
 
@@ -115,10 +115,10 @@ repos:
       - id: manifest-validation
         name: Release Manifest Validation
         entry: |
-          bash -c 'for f in "$@"; do 
-            if [[ "$f" == releases/release-*.yaml ]]; then 
+          bash -c 'for f in "$@"; do
+            if [[ "$f" == releases/release-*.yaml ]]; then
               echo "Validating manifest: $f"
-              python3 -c "import yaml,sys; m=yaml.safe_load(open(\"$f\")); assert \"version\" in m, \"Missing version\"; assert \"components\" in m, \"Missing components\"; assert \"aap_configuration\" in m[\"components\"], \"Missing aap_configuration\"; assert \"collections\" in m[\"components\"], \"Missing collections\"; assert \"execution_environment\" in m[\"components\"], \"Missing execution_environment\"" || { 
+              python3 -c "import yaml,sys; m=yaml.safe_load(open(\"$f\")); assert \"version\" in m, \"Missing version\"; assert \"components\" in m, \"Missing components\"; assert \"aap_configuration\" in m[\"components\"], \"Missing aap_configuration\"; assert \"collections\" in m[\"components\"], \"Missing collections\"; assert \"execution_environment\" in m[\"components\"], \"Missing execution_environment\"" || {
                 echo "❌ Invalid manifest: $f"
                 exit 1
               }
@@ -137,11 +137,11 @@ repos:
       - id: commit-sha-format
         name: Commit SHA Format Check
         entry: |
-          bash -c 'for f in "$@"; do 
-            if [[ "$f" == releases/release-*.yaml ]]; then 
-              if grep -E "commit:\s*\"?[a-f0-9]{40}\"?" "$f" > /dev/null; then 
+          bash -c 'for f in "$@"; do
+            if [[ "$f" == releases/release-*.yaml ]]; then
+              if grep -E "commit:\s*\"?[a-f0-9]{40}\"?" "$f" > /dev/null; then
                 echo "✅ Valid commit SHAs in $f"
-              else 
+              else
                 echo "⚠️  WARNING: Commit SHAs should be 40 character hex strings in $f"
               fi
             fi
@@ -237,8 +237,8 @@ repos:
         name: No Secrets in Manifests
         entry: |
           bash -c 'echo "Checking for secrets..."
-          for f in "$@"; do 
-            if grep -iE "(password|secret|token|api[_-]?key):\s*[\"'\''][^{]" "$f" | grep -v "^#"; then 
+          for f in "$@"; do
+            if grep -iE "(password|secret|token|api[_-]?key):\s*[\"'\''][^{]" "$f" | grep -v "^#"; then
               echo "❌ VIOLATION: Possible secret in $f"
               echo "Constitution Article V: No secrets in Git"
               exit 1

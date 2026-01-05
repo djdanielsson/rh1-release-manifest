@@ -1,0 +1,92 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: validate-manifest
+  labels:
+    app.kubernetes.io/component: release-management
+spec:
+  description: |
+    Validates a release manifest file structure and content.
+  params:
+    - name: MANIFEST_PATH
+      type: string
+      description: Path to manifest file to validate
+  workspaces:
+    - name: source
+      description: Workspace containing the manifest
+  results:
+    - name: valid
+      description: Whether the manifest is valid (true/false)
+    - name: version
+      description: Extracted version from manifest
+  steps:
+    - name: validate
+      image: quay.io/centos/centos:stream9-minimal
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        
+        # Install yq
+        curl -sL https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 -o /usr/local/bin/yq
+        chmod +x /usr/local/bin/yq
+        
+        MANIFEST="$(params.MANIFEST_PATH)"
+        
+        if [ ! -f "$MANIFEST" ]; then
+          echo "❌ Manifest file not found: $MANIFEST"
+          echo "false" > $(results.valid.path)
+          exit 1
+        fi
+        
+        echo "Validating manifest: $MANIFEST"
+        
+        # Check required fields
+        REQUIRED_FIELDS=(
+          ".version"
+          ".components.aap_configuration.commit"
+          ".components.collections.commit"
+          ".components.execution_environment.digest"
+        )
+        
+        VALID=true
+        for field in "${REQUIRED_FIELDS[@]}"; do
+          VALUE=$(yq eval "$field" "$MANIFEST")
+          if [ "$VALUE" == "null" ] || [ -z "$VALUE" ]; then
+            echo "❌ Required field missing: $field"
+            VALID=false
+          fi
+        done
+        
+        # Validate commit SHA format (40 chars)
+        AAP_COMMIT=$(yq eval '.components.aap_configuration.commit' "$MANIFEST")
+        if [[ ! "$AAP_COMMIT" =~ ^[a-f0-9]{40}$ ]] && [ "$AAP_COMMIT" != "HEAD" ]; then
+          echo "❌ Invalid AAP config commit SHA: $AAP_COMMIT (must be 40 hex chars)"
+          VALID=false
+        fi
+        
+        COLLECTION_COMMIT=$(yq eval '.components.collections.commit' "$MANIFEST")
+        if [[ ! "$COLLECTION_COMMIT" =~ ^[a-f0-9]{40}$ ]] && [ "$COLLECTION_COMMIT" != "HEAD" ]; then
+          echo "❌ Invalid collection commit SHA: $COLLECTION_COMMIT (must be 40 hex chars)"
+          VALID=false
+        fi
+        
+        # Validate EE digest format
+        EE_DIGEST=$(yq eval '.components.execution_environment.digest' "$MANIFEST")
+        if [[ ! "$EE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] && [ "$EE_DIGEST" != "latest" ]; then
+          echo "⚠️  EE digest format warning: $EE_DIGEST (expected sha256:...)"
+        fi
+        
+        # Extract version
+        VERSION=$(yq eval '.version' "$MANIFEST")
+        echo "$VERSION" > $(results.version.path)
+        
+        if [ "$VALID" = true ]; then
+          echo "✅ Manifest validation passed"
+          echo "true" > $(results.valid.path)
+        else
+          echo "❌ Manifest validation failed"
+          echo "false" > $(results.valid.path)
+          exit 1
+        fi
+

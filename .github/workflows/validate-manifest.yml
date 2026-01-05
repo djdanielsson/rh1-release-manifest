@@ -46,7 +46,7 @@ import sys
 
 with open('$manifest') as f:
     m = yaml.safe_load(f)
-    
+
 required_fields = ['version', 'components']
 missing = [f for f in required_fields if f not in m]
 
@@ -83,13 +83,13 @@ EOF
           for manifest in releases/release-v*.yaml; do
             if [ -f "$manifest" ]; then
               version=$(yq eval '.version' "$manifest")
-              
+
               if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
                 echo "❌ Invalid version format: $version in $manifest"
                 echo "Must follow semver: x.y.z or x.y.z-prerelease"
                 exit 1
               fi
-              
+
               echo "✅ Valid version: $version"
             fi
           done
@@ -100,16 +100,16 @@ EOF
           for manifest in releases/release-v*.yaml; do
             if [ -f "$manifest" ]; then
               version=$(yq eval '.version' "$manifest")
-              
+
               if [[ " ${versions[@]} " =~ " ${version} " ]]; then
                 echo "❌ Duplicate version found: $version"
                 exit 1
               fi
-              
+
               versions+=("$version")
             fi
           done
-          
+
           echo "✅ No duplicate versions found"
 
   validate-commit-shas:
@@ -124,7 +124,7 @@ EOF
           for manifest in releases/release-*.yaml; do
             if [ -f "$manifest" ]; then
               echo "Checking commit SHAs in $manifest..."
-              
+
               # Extract commit SHAs and validate format (40 hex chars)
               if grep -E "commit:" "$manifest" | grep -v "^#"; then
                 if ! grep -E "commit:\s*\"?[a-f0-9]{40}\"?" "$manifest" > /dev/null; then
@@ -146,7 +146,7 @@ EOF
           for manifest in releases/release-*.yaml; do
             if [ -f "$manifest" ]; then
               echo "Checking image digests in $manifest..."
-              
+
               # Check for sha256: format
               if grep -E "digest:" "$manifest" | grep -v "^#"; then
                 if ! grep -E "digest:\s*\"?sha256:[a-f0-9]{64}\"?" "$manifest" > /dev/null; then
@@ -168,14 +168,14 @@ EOF
           for manifest in releases/release-v*.yaml releases/release-prod*.yaml; do
             if [ -f "$manifest" ]; then
               echo "Checking $manifest for production safety..."
-              
+
               if grep -iE "latest|:main\b|:master\b" "$manifest" | grep -v "^#" | grep -v "branch:"; then
                 echo "❌ VIOLATION: Cannot use latest/main/master in versioned release"
                 echo "File: $manifest"
                 echo "Constitution Article III: Atomic Promotion requires locked versions"
                 exit 1
               fi
-              
+
               echo "✅ No latest/main/master references found"
             fi
           done

@@ -63,13 +63,13 @@ commands:
         wget -q https://github.com/mikefarah/yq/releases/download/${VERSION}/yq_linux_amd64 -O /tmp/yq
         sudo mv /tmp/yq /usr/local/bin/yq
         sudo chmod +x /usr/local/bin/yq
-        
+
         # Install Python tools
         pip install --user yamllint pre-commit jsonschema pyyaml semver
-        
+
         # Make scripts executable
         chmod +x scripts/*.sh
-        
+
         echo "✅ Tools installed successfully"
       group:
         kind: build
