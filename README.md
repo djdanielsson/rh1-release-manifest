@@ -56,12 +56,7 @@ automation-release-manifest/
 │   └── triggers/
 │       └── release-trigger.yaml    # EventListener and templates
 └── scripts/                        # Helper scripts (for local use)
-    ├── generate-version.sh         # Generate YY.MM.DD.PATCH version
-    ├── validate-version.sh         # Validate version format
-    ├── create-release-tag.sh       # Create git release tag
-    ├── validate-manifest.sh        # Validate manifest format
-    ├── validate-manifest-schema.py # Schema validation
-    └── promote.sh                  # Promote to environment (legacy)
+    └── validate-manifest-schema.py # JSON schema validation
 
 ```
 
@@ -335,48 +330,12 @@ See `tekton/pipelines/rollback.yaml` for implementation details.
 
 ## Helper Scripts
 
-### Version Management Scripts
+### Schema Validation (Python)
 
-#### generate-version.sh
-
-Generates current version in YY.MM.DD.PATCH format:
+For local manifest schema validation:
 
 ```bash
-#!/bin/bash
-# Generate version string in YY.MM.DD.PATCH format
-
-PATCH=${1:-0}
-VERSION=$(date +"%y.%m.%d").${PATCH}
-echo "${VERSION}"
-
-# Usage:
-./scripts/generate-version.sh     # Output: 25.01.05.0
-./scripts/generate-version.sh 1   # Output: 25.01.05.1
-```
-
-#### validate-version.sh
-
-Validates version format:
-
-```bash
-#!/bin/bash
-# Validate version string format: YY.MM.DD.PATCH
-
-./scripts/validate-version.sh 25.01.05.0    # ✅ Valid
-./scripts/validate-version.sh 25.1.5.0      # ❌ Invalid (missing leading zeros)
-```
-
-#### create-release-tag.sh
-
-Interactive tool to create git release tags:
-
-```bash
-#!/bin/bash
-# Create a release tag with proper format
-
-./scripts/create-release-tag.sh         # Create 25.01.05.0
-./scripts/create-release-tag.sh 1       # Create 25.01.05.1 (hotfix)
-./scripts/create-release-tag.sh 0 "Release message"
+python scripts/validate-manifest-schema.py releases/release-25.01.05.0.yaml
 ```
 
 ### Manifest Creation (Tekton)
@@ -399,40 +358,6 @@ This pipeline:
 7. Commits and tags the release
 
 See `tekton/tasks/create-manifest.yaml` for implementation.
-
-### validate-manifest.sh
-
-```bash
-#!/bin/bash
-# Validate manifest format
-
-MANIFEST=$1
-if [ ! -f "$MANIFEST" ]; then
-  echo "Error: Manifest file not found: $MANIFEST"
-  exit 1
-fi
-
-# Check YAML syntax
-yamllint $MANIFEST || exit 1
-
-# Check required fields
-REQUIRED_FIELDS=(
-  "version"
-  "components.aap_configuration.commit"
-  "components.collections.commit"
-  "components.execution_environment.digest"
-)
-
-for field in "${REQUIRED_FIELDS[@]}"; do
-  VALUE=$(yq eval ".$field" $MANIFEST)
-  if [ "$VALUE" == "null" ] || [ -z "$VALUE" ]; then
-    echo "Error: Required field missing: $field"
-    exit 1
-  fi
-done
-
-echo "✓ Manifest validation passed"
-```
 
 ## Secrets Management
 

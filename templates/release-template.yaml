@@ -1,8 +1,11 @@
 ---
 # Release Manifest Template
-# Copy this file to releases/release-vX.Y.Z.yaml and fill in actual values
+# Copy this file to releases/release-YY.MM.DD.PATCH.yaml and fill in actual values
+# Or use: tkn pipeline start create-release -p VERSION=YY.MM.DD.PATCH
 
-version: "X.Y.Z"
+# Version follows CalVer: YY.MM.DD.PATCH
+# Examples: 25.01.05.0, 25.01.05.1, 25.01.06.0
+version: "YY.MM.DD.PATCH"
 created: "YYYY-MM-DDTHH:MM:SSZ"
 created_by: "username"
 description: "Brief description of this release"
@@ -26,16 +29,23 @@ components:
   execution_environment:
     registry: "quay.io"
     repository: "myorg/custom-ee"
-    tag: "X.Y.Z"
-    digest: "sha256:full-image-digest"
+    tag: "YY.MM.DD.PATCH"  # Same as release version
+    digest: "sha256:full-64-character-image-digest"
     notes: "Description of EE changes"
 
 environments:
-  qa:
+  dev:
     deployed: null  # Set to ISO 8601 timestamp when deployed
     validated: false  # Set to true after validation
     validated_by: null  # Username of validator
     validated_at: null  # ISO 8601 timestamp
+    notes: ""
+
+  qa:
+    deployed: null
+    validated: false
+    validated_by: null
+    validated_at: null
     notes: ""
 
   prod:
@@ -68,9 +78,11 @@ metadata:
 
   # Rollback information
   rollback_tested: false
-  rollback_procedure: ""
+  rollback_procedure: "tkn pipeline start rollback -p TARGET_VERSION=<previous> -p ENVIRONMENT=<env>"
 
   # Known issues
   known_issues: []
   workarounds: []
 
+# Rollback history (populated by rollback pipeline)
+rollback_history: []

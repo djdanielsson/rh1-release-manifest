@@ -1,7 +1,8 @@
 ---
-# Release v1.0.0 - Initial Production Release
-version: "1.0.0"
-created: "2025-10-29T00:00:00Z"
+# Release 25.01.05.0 - Initial Production Release
+# Version follows CalVer: YY.MM.DD.PATCH
+version: "25.01.05.0"
+created: "2025-01-05T00:00:00Z"
 created_by: "platform-team"
 description: "Initial production release with complete GitOps platform"
 
@@ -27,27 +28,34 @@ components:
   execution_environment:
     registry: "quay.io"
     repository: "myorg/custom-ee"
-    tag: "1.0.0"
+    tag: "25.01.05.0"
     digest: "sha256:fedcba9876543210abcdef1234567890abcdef"  # Replace with actual digest
     notes: |
-      - Based on AAP 2.5 ee-minimal-rhel9
+      - Based on AAP 2.6 ee-minimal-rhel9
       - Includes custom collection
       - Includes infra.aap_configuration collection
 
 environments:
-  qa:
-    deployed: "2025-10-29T10:00:00Z"
+  dev:
+    deployed: "2025-01-05T10:00:00Z"
     validated: true
-    validated_by: "qa-team"
-    validated_at: "2025-10-29T12:00:00Z"
-    notes: "All QA tests passed successfully"
+    validated_by: "dev-team"
+    validated_at: "2025-01-05T11:00:00Z"
+    notes: "Dev testing completed"
+
+  qa:
+    deployed: null
+    validated: false
+    validated_by: null
+    validated_at: null
+    notes: "Awaiting promotion from dev"
 
   prod:
     deployed: null
     validated: false
     validated_by: null
     validated_at: null
-    notes: "Awaiting approval for production deployment"
+    notes: "Awaiting QA validation and approval"
 
 validation:
   tests_required:
@@ -75,7 +83,7 @@ metadata:
   documentation: "../specs/001-cloud-native-ansible-lifecycle/quickstart.md"
 
   rollback_tested: true
-  rollback_procedure: "Run promotion pipeline with v0.9.0 manifest"
+  rollback_procedure: "tkn pipeline start rollback -p TARGET_VERSION=<previous> -p ENVIRONMENT=<env>"
 
   known_issues: []
   workarounds: []
