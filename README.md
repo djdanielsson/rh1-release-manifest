@@ -66,8 +66,8 @@ automation-release-manifest/
 
 ```yaml
 ---
-# Release Manifest v1.0.0
-version: "1.0.0"
+# Release Manifest 26.01.06.0
+version: "26.01.06.0"
 created: "2025-10-29T10:00:00Z"
 created_by: "platform-team"
 description: "Initial production release"
@@ -89,7 +89,7 @@ components:
   execution_environment:
     registry: "quay.io"
     repository: "myorg/custom-ee"
-    tag: "1.0.0"
+    tag: "26.01.06.0"
     digest: "sha256:fedcba987654321..."
 
 environments:
@@ -127,7 +127,7 @@ cd ../automation-collection-example
 COLLECTION_SHA=$(git rev-parse HEAD)
 
 # Get EE image digest
-EE_DIGEST=$(podman inspect quay.io/myorg/custom-ee:1.0.0 \
+EE_DIGEST=$(podman inspect quay.io/myorg/custom-ee:26.01.06.0 \
   --format='{{.Digest}}')
 ```
 
@@ -135,20 +135,20 @@ EE_DIGEST=$(podman inspect quay.io/myorg/custom-ee:1.0.0 \
 
 ```bash
 # Use the template
-cp templates/release-template.yaml releases/release-v1.0.0.yaml
+cp templates/release-template.yaml releases/release-26.01.06.0.yaml
 
 # Edit with actual values
-vi releases/release-v1.0.0.yaml
+vi releases/release-26.01.06.0.yaml
 ```
 
 ### 3. Commit and Tag
 
 ```bash
-git add releases/release-v1.0.0.yaml
-git commit -m "Release v1.0.0: Initial production release"
-git tag -a v1.0.0 -m "Release v1.0.0"
+git add releases/release-26.01.06.0.yaml
+git commit -m "Release 26.01.06.0: Initial production release"
+git tag -a 26.01.06.0 -m "Release 26.01.06.0"
 git push origin main
-git push origin v1.0.0
+git push origin 26.01.06.0
 ```
 
 ## Tekton Pipelines
@@ -249,9 +249,9 @@ See `tekton/README.md` for complete documentation
 ```
 1. Issue Detected in Prod
    ↓
-2. Identify Last Good Manifest (e.g., v1.0.0)
+2. Identify Last Good Manifest (e.g., 26.01.05.0)
    ↓
-3. Run Promotion Pipeline with v1.0.0
+3. Run Promotion Pipeline with 26.01.05.0
    ↓
 4. All components rolled back atomically
    ↓
@@ -273,7 +273,7 @@ See `tekton/README.md` for complete documentation
 ### Transitions
 
 ```yaml
-# releases/release-v1.0.0.yaml
+# releases/release-26.01.06.0.yaml
 
 # Initial state
 environments:
@@ -405,7 +405,7 @@ commit: "abc123def456789012345678901234567890abcd"
 
 # Bad
 commit: "main"
-commit: "v1.0.0"
+commit: "26.01.06.0"
 ```
 
 ### 3. Use Image Digests
@@ -450,10 +450,10 @@ validation:
 
 ```bash
 # Validate YAML syntax
-yamllint releases/release-v1.0.0.yaml
+yamllint releases/release-26.01.06.0.yaml
 
 # Check structure
-yq eval '.' releases/release-v1.0.0.yaml
+yq eval '.' releases/release-26.01.06.0.yaml
 ```
 
 ### Component Not Found
@@ -540,17 +540,17 @@ components:
 ### QA/Staging
 
 ```yaml
-# releases/release-v1.0.0-rc1.yaml
+# releases/release-26.01.06.0-rc1.yaml
 # Release candidates for testing
-version: "1.0.0-rc1"
+version: "26.01.06.0-rc1"
 ```
 
 ### Production
 
 ```yaml
-# releases/release-v1.0.0.yaml
+# releases/release-26.01.06.0.yaml
 # Stable, tested, approved releases
-version: "1.0.0"
+version: "26.01.06.0"
 ```
 
 ## Links
