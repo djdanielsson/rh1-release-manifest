@@ -564,8 +564,8 @@ version: "26.01.06.0"
 
 ### Documentation
 - **Project Workspace**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle
-- **Project Specs**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/tree/main/specs/001-cloud-native-ansible-lifecycle
-- **Quickstart Guide**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/specs/001-cloud-native-ansible-lifecycle/quickstart.md
+- **Project Specification**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/.specify/memory/specification.md
+- **Quickstart Guide**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/docs/GETTING-STARTED.md
 - **Constitution**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/.specify/memory/constitution.md
 
 ---

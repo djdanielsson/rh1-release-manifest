@@ -81,7 +81,7 @@ metadata:
     - "https://github.com/djdanielsson/rh1-aap-config-as-code/pull/1"
     - "https://github.com/djdanielsson/rh1-custom-collection/pull/1"
 
-  documentation: "../specs/001-cloud-native-ansible-lifecycle/quickstart.md"
+  documentation: "../docs/GETTING-STARTED.md"
 
   rollback_tested: true
   rollback_procedure: "tkn pipeline start rollback -p TARGET_VERSION=<previous> -p ENVIRONMENT=<env>"
