@@ -31,3 +31,4 @@ commonLabels:
   app.kubernetes.io/part-of: rh1-release-manifest
   app.kubernetes.io/managed-by: kustomize
 
+

@@ -1,6 +1,7 @@
 ---
 # Release 25.01.05.0 - Initial Production Release
 # Version follows CalVer: YY.MM.DD.PATCH
+# NOTE: Example file — replace placeholder SHAs/digests before any real promotion.
 version: "25.01.05.0"
 created: "2025-01-05T00:00:00Z"
 created_by: "platform-team"
