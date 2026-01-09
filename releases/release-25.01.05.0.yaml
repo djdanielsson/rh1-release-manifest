@@ -17,6 +17,15 @@ components:
       - dispatch role with wildcard variables
       - Custom credential types
 
+  playbooks:
+    repository: "https://github.com/djdanielsson/rh1-automation-playbooks.git"
+    commit: "fed987cba6543210fedcba9876543210fedcba98"  # Replace with actual SHA
+    branch: "main"
+    notes: |
+      - Initial playbook set for webapp deployment and database backup
+      - Role-based playbooks with proper variable abstraction
+      - Platform smoke tests included
+
   collections:
     repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
     commit: "def456abc123789012345678901234567890abcd"  # Replace with actual SHA
