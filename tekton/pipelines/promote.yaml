@@ -12,7 +12,7 @@ spec:
   params:
     - name: VERSION
       type: string
-      description: Release version to promote (YY.MM.DD.PATCH format)
+      description: Release version to promote (YY.M.D-PATCH format)
     - name: FROM_ENVIRONMENT
       type: string
       description: Source environment (dev, qa)

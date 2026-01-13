@@ -11,7 +11,7 @@ spec:
   params:
     - name: VERSION
       type: string
-      description: Release version (YY.MM.DD.PATCH format)
+      description: Release version (YY.M.D-PATCH format)
     - name: AAP_CONFIG_COMMIT
       type: string
       description: Full 40-char Git SHA for aap-config-as-code

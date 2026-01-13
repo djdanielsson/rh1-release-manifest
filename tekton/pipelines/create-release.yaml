@@ -14,7 +14,7 @@ spec:
     - name: VERSION
       type: string
       description: |
-        Release version in YY.MM.DD.PATCH format (e.g., 25.01.05.0).
+        Release version in YY.M.D-PATCH format (e.g., 26.1.5-0).
         Use generate-version task to create automatically.
     - name: DESCRIPTION
       type: string

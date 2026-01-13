@@ -1,11 +1,11 @@
 ---
 # Release Manifest Template
-# Copy this file to releases/release-YY.MM.DD.PATCH.yaml and fill in actual values
-# Or use: tkn pipeline start create-release -p VERSION=YY.MM.DD.PATCH
+# Copy this file to releases/release-YY.M.D-PATCH.yaml and fill in actual values
+# Or use: tkn pipeline start create-release -p VERSION=YY.M.D-PATCH
 
-# Version follows CalVer: YY.MM.DD.PATCH
-# Examples: 25.01.05.0, 25.01.05.1, 25.01.06.0
-version: "YY.MM.DD.PATCH"
+# Version follows CalVer: YY.M.D-PATCH
+# Examples: 26.1.5-0, 26.1.5-1, 26.1.6-0
+version: "YY.M.D-PATCH"
 created: "YYYY-MM-DDTHH:MM:SSZ"
 created_by: "username"
 description: "Brief description of this release"
@@ -29,7 +29,7 @@ components:
   execution_environment:
     registry: "quay.io"
     repository: "myorg/custom-ee"
-    tag: "YY.MM.DD.PATCH"  # Same as release version
+    tag: "YY.M.D-PATCH"  # Same as release version
     digest: "sha256:full-64-character-image-digest"
     notes: "Description of EE changes"
 

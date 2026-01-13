@@ -7,11 +7,11 @@ metadata:
     app.kubernetes.io/component: release-management
 spec:
   description: |
-    Validates version string follows YY.MM.DD.PATCH CalVer format.
+    Validates version string follows YY.M.D-PATCH CalVer format.
   params:
     - name: VERSION
       type: string
-      description: Version string to validate (e.g., 25.01.05.0)
+      description: Version string to validate (e.g., 26.1.5-0)
   results:
     - name: valid
       description: Whether the version is valid (true/false)
@@ -33,18 +33,18 @@ spec:
         VERSION="$(params.VERSION)"
         echo "Validating version: $VERSION"
         
-        # Regex for YY.MM.DD.PATCH format
-        REGEX='^[0-9]{2}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])\.[0-9]+$'
+        # Regex for YY.M.D-PATCH format (no leading zeros, hyphen before patch)
+        REGEX='^[0-9]{2}\.(1[0-2]|[1-9])\.(3[01]|[12][0-9]|[1-9])-[0-9]+$'
         
         if [[ ! "$VERSION" =~ $REGEX ]]; then
           echo "❌ Invalid version format: $VERSION"
-          echo "Expected: YY.MM.DD.PATCH (e.g., 25.01.05.0)"
+          echo "Expected: YY.M.D-PATCH (e.g., 26.1.5-0)"
           echo "false" > $(results.valid.path)
           exit 1
         fi
         
-        # Extract components
-        IFS='.' read -r YEAR MONTH DAY PATCH <<< "$VERSION"
+        # Extract components (split on . and -)
+        IFS='.-' read -r YEAR MONTH DAY PATCH <<< "$VERSION"
         
         echo "✅ Valid version: $VERSION"
         echo "  Year:  $YEAR"

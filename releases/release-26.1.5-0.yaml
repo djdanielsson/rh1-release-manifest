@@ -1,8 +1,8 @@
 ---
-# Release 25.01.05.0 - Initial Production Release
-# Version follows CalVer: YY.MM.DD.PATCH
+# Release 26.1.5-0 - Initial Production Release
+# Version follows CalVer: YY.M.D-PATCH
 # NOTE: Example file — replace placeholder SHAs/digests before any real promotion.
-version: "25.01.05.0"
+version: "26.1.5-0"
 created: "2025-01-05T00:00:00Z"
 created_by: "platform-team"
 description: "Initial production release with complete GitOps platform"
@@ -38,7 +38,7 @@ components:
   execution_environment:
     registry: "quay.io"
     repository: "myorg/custom-ee"
-    tag: "25.01.05.0"
+    tag: "26.1.5-0"
     digest: "sha256:fedcba9876543210abcdef1234567890abcdef"  # Replace with actual digest
     notes: |
       - Based on AAP 2.6 ee-minimal-rhel9

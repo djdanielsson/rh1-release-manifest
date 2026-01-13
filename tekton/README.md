@@ -8,7 +8,7 @@ Tekton pipelines for managing releases, promotions, and rollbacks.
 tekton/
 ├── kustomization.yaml          # Deploy all resources with: oc apply -k .
 ├── tasks/
-│   ├── validate-version.yaml   # Validate YY.MM.DD.PATCH format
+│   ├── validate-version.yaml   # Validate YY.M.D-PATCH format
 │   ├── create-manifest.yaml    # Create release manifest file
 │   ├── validate-manifest.yaml  # Validate manifest structure
 │   ├── promote-environment.yaml # Deploy to an environment
@@ -70,7 +70,7 @@ oc apply -f tekton/triggers/
 ```bash
 # Using tkn CLI
 tkn pipeline start create-release \
-  -p VERSION=25.01.05.0 \
+  -p VERSION=26.1.5-0 \
   -p DESCRIPTION="Initial release" \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
   -w name=aap-config-source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -82,7 +82,7 @@ curl -X POST http://el-release-management-listener:8080 \
   -H "Content-Type: application/json" \
   -d '{
     "action": "create-release",
-    "version": "25.01.05.0",
+    "version": "26.1.5-0",
     "description": "Initial release"
   }'
 ```
@@ -92,7 +92,7 @@ curl -X POST http://el-release-management-listener:8080 \
 ```bash
 # Dev → QA
 tkn pipeline start promote \
-  -p VERSION=25.01.05.0 \
+  -p VERSION=26.1.5-0 \
   -p FROM_ENVIRONMENT=dev \
   -p TO_ENVIRONMENT=qa \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -100,7 +100,7 @@ tkn pipeline start promote \
 
 # QA → Prod
 tkn pipeline start promote \
-  -p VERSION=25.01.05.0 \
+  -p VERSION=26.1.5-0 \
   -p FROM_ENVIRONMENT=qa \
   -p TO_ENVIRONMENT=prod \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -112,15 +112,15 @@ tkn pipeline start promote \
 ```bash
 # Rollback QA to a previous version
 tkn pipeline start rollback \
-  -p TARGET_VERSION=25.01.04.0 \
+  -p TARGET_VERSION=26.1.4-0 \
   -p ENVIRONMENT=qa \
-  -p REASON="Bug found in 25.01.05.0" \
+  -p REASON="Bug found in 26.1.5-0" \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
   -w name=aap-config,volumeClaimTemplateFile=pvc-template.yaml
 
 # Dry-run (validate without applying)
 tkn pipeline start rollback \
-  -p TARGET_VERSION=25.01.04.0 \
+  -p TARGET_VERSION=26.1.4-0 \
   -p ENVIRONMENT=prod \
   -p DRY_RUN=true \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -131,7 +131,7 @@ tkn pipeline start rollback \
 
 ### create-release Pipeline
 
-1. **validate-version**: Validates YY.MM.DD.PATCH format
+1. **validate-version**: Validates YY.M.D-PATCH format
 2. **get-aap-commit**: Clones aap-config-as-code and gets HEAD SHA
 3. **get-collection-commit**: Clones collection repo and gets HEAD SHA
 4. **get-ee-digest**: Gets EE image digest via skopeo
@@ -157,12 +157,12 @@ tkn pipeline start rollback \
 
 ## Version Format
 
-All versions follow **CalVer: YY.MM.DD.PATCH**
+All versions follow **CalVer: YY.M.D-PATCH**
 
 Examples:
-- `25.01.05.0` - January 5, 2025, initial release
-- `25.01.05.1` - January 5, 2025, first patch
-- `25.01.06.0` - January 6, 2025, new day's release
+- `26.1.5-0` - January 5, 2025, initial release
+- `26.1.5-1` - January 5, 2025, first patch
+- `26.1.6-0` - January 6, 2025, new day's release
 
 ## Integration with cluster-config
 

@@ -13,7 +13,7 @@ spec:
   params:
     - name: TARGET_VERSION
       type: string
-      description: Version to roll back to (YY.MM.DD.PATCH format)
+      description: Version to roll back to (YY.M.D-PATCH format)
     - name: ENVIRONMENT
       type: string
       description: Target environment (dev, qa, prod)
