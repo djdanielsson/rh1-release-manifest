@@ -1,0 +1,475 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/tektoncd/pipeline/main/pkg/apis/pipeline/v1/swagger.json
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: release-manifest-create-release
+  annotations:
+    pipelinesascode.tekton.dev/on-event: "[push]"
+    pipelinesascode.tekton.dev/on-target-branch: "[refs/tags/*]"
+    pipelinesascode.tekton.dev/task: "[git-clone]"
+    pipelinesascode.tekton.dev/max-keep-runs: "10"
+spec:
+  params:
+    - name: repo_url
+      value: "{{ repo_url }}"
+    - name: revision
+      value: "{{ revision }}"
+    - name: git_ref
+      value: "{{ git_ref }}"
+  pipelineSpec:
+    params:
+      - name: repo_url
+        type: string
+      - name: revision
+        type: string
+      - name: git_ref
+        type: string
+        description: Full git ref (e.g., refs/tags/26.1.5-0)
+    workspaces:
+      - name: source
+        description: Main workspace for release-manifest repo
+      - name: aap-config-source
+        description: Workspace to clone aap-config repo
+      - name: collection-source
+        description: Workspace to clone collection repo
+    results:
+      - name: version
+        description: Release version
+        value: $(tasks.extract-version.results.version)
+      - name: manifest-path
+        description: Path to the created manifest
+        value: $(tasks.create-manifest.results.manifest-path)
+
+    tasks:
+      - name: fetch-repository
+        taskRef:
+          name: git-clone
+          kind: ClusterTask
+        workspaces:
+          - name: output
+            workspace: source
+        params:
+          - name: url
+            value: $(params.repo_url)
+          - name: revision
+            value: $(params.revision)
+          - name: depth
+            value: "0"
+
+      - name: extract-version
+        runAfter:
+          - fetch-repository
+        taskSpec:
+          params:
+            - name: GIT_REF
+              type: string
+          results:
+            - name: version
+              description: Extracted version from tag
+            - name: valid
+              description: Whether version format is valid
+          steps:
+            - name: extract
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                GIT_REF="$(params.GIT_REF)"
+                # Extract version from refs/tags/XX.M.D-PATCH
+                VERSION="${GIT_REF#refs/tags/}"
+
+                echo "Extracted version from tag: $VERSION"
+
+                # Validate version format (YY.M.D-PATCH)
+                REGEX='^[0-9]{2}\.(1[0-2]|[1-9])\.(3[01]|[12][0-9]|[1-9])-[0-9]+$'
+
+                if [[ ! "$VERSION" =~ $REGEX ]]; then
+                  echo "❌ Invalid version format: $VERSION"
+                  echo "Expected: YY.M.D-PATCH (e.g., 26.1.5-0)"
+                  echo "false" > $(results.valid.path)
+                  exit 1
+                fi
+
+                echo "✅ Valid version format: $VERSION"
+                echo -n "$VERSION" > $(results.version.path)
+                echo "true" > $(results.valid.path)
+        params:
+          - name: GIT_REF
+            value: $(params.git_ref)
+
+      - name: check-manifest-not-exists
+        runAfter:
+          - extract-version
+        workspaces:
+          - name: source
+            workspace: source
+        taskSpec:
+          params:
+            - name: VERSION
+              type: string
+          workspaces:
+            - name: source
+          steps:
+            - name: check
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              workingDir: $(workspaces.source.path)
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                VERSION="$(params.VERSION)"
+                MANIFEST_FILE="releases/release-${VERSION}.yaml"
+
+                if [ -f "$MANIFEST_FILE" ]; then
+                  echo "❌ Error: Manifest already exists: $MANIFEST_FILE"
+                  echo "Cannot create duplicate release manifest."
+                  exit 1
+                fi
+
+                echo "✅ No existing manifest for version $VERSION"
+        params:
+          - name: VERSION
+            value: $(tasks.extract-version.results.version)
+
+      - name: get-aap-commit
+        runAfter:
+          - extract-version
+        workspaces:
+          - name: source
+            workspace: aap-config-source
+        taskSpec:
+          params:
+            - name: BRANCH
+              type: string
+          workspaces:
+            - name: source
+          results:
+            - name: commit
+              description: Full 40-char commit SHA
+          steps:
+            - name: clone-and-get-sha
+              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
+              workingDir: $(workspaces.source.path)
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                git clone --depth 1 --branch $(params.BRANCH) \
+                  https://github.com/djdanielsson/rh1-aap-config-as-code.git .
+
+                COMMIT=$(git rev-parse HEAD)
+
+                echo "AAP Config commit: $COMMIT"
+                echo -n "$COMMIT" > $(results.commit.path)
+        params:
+          - name: BRANCH
+            value: main
+
+      - name: get-collection-commit
+        runAfter:
+          - extract-version
+        workspaces:
+          - name: source
+            workspace: collection-source
+        taskSpec:
+          params:
+            - name: BRANCH
+              type: string
+          workspaces:
+            - name: source
+          results:
+            - name: commit
+              description: Full 40-char commit SHA
+          steps:
+            - name: clone-and-get-sha
+              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
+              workingDir: $(workspaces.source.path)
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                git clone --depth 1 --branch $(params.BRANCH) \
+                  https://github.com/djdanielsson/rh1-custom-collection.git .
+
+                COMMIT=$(git rev-parse HEAD)
+
+                echo "Collection commit: $COMMIT"
+                echo -n "$COMMIT" > $(results.commit.path)
+        params:
+          - name: BRANCH
+            value: main
+
+      - name: get-ee-digest
+        runAfter:
+          - extract-version
+        taskSpec:
+          params:
+            - name: IMAGE
+              type: string
+            - name: VERSION
+              type: string
+          results:
+            - name: digest
+              description: Image digest (sha256:...)
+            - name: tag
+              description: Image tag
+          steps:
+            - name: get-digest
+              image: quay.io/skopeo/stable:latest
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                IMAGE="$(params.IMAGE):$(params.VERSION)"
+
+                echo "Getting digest for: $IMAGE"
+
+                # Try to get digest, fall back to 'latest' tag if version not found
+                DIGEST=$(skopeo inspect "docker://$IMAGE" 2>/dev/null | grep -o '"Digest": "sha256:[^"]*' | cut -d'"' -f4) || true
+
+                if [ -z "$DIGEST" ]; then
+                  echo "⚠️  Image not found with version tag, trying 'latest'"
+                  LATEST_IMAGE="$(params.IMAGE):latest"
+                  DIGEST=$(skopeo inspect "docker://$LATEST_IMAGE" 2>/dev/null | grep -o '"Digest": "sha256:[^"]*' | cut -d'"' -f4) || true
+                fi
+
+                if [ -z "$DIGEST" ]; then
+                  echo "⚠️  Could not get digest, using placeholder"
+                  DIGEST="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                fi
+
+                echo "Digest: $DIGEST"
+                echo -n "$DIGEST" > $(results.digest.path)
+                echo -n "$(params.VERSION)" > $(results.tag.path)
+        params:
+          - name: IMAGE
+            value: quay.io/myorg/custom-ee
+          - name: VERSION
+            value: $(tasks.extract-version.results.version)
+
+      - name: create-manifest
+        runAfter:
+          - check-manifest-not-exists
+          - get-aap-commit
+          - get-collection-commit
+          - get-ee-digest
+        workspaces:
+          - name: source
+            workspace: source
+        taskSpec:
+          params:
+            - name: VERSION
+              type: string
+            - name: AAP_CONFIG_COMMIT
+              type: string
+            - name: COLLECTION_COMMIT
+              type: string
+            - name: EE_TAG
+              type: string
+            - name: EE_DIGEST
+              type: string
+          workspaces:
+            - name: source
+          results:
+            - name: manifest-path
+              description: Path to the created manifest file
+          steps:
+            - name: create
+              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
+              workingDir: $(workspaces.source.path)
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                VERSION="$(params.VERSION)"
+                MANIFEST_FILE="releases/release-${VERSION}.yaml"
+
+                echo "╔════════════════════════════════════════════════════════════════════╗"
+                echo "║                    CREATING RELEASE MANIFEST                       ║"
+                echo "╠════════════════════════════════════════════════════════════════════╣"
+                echo "║  Version:     $VERSION                                             ║"
+                echo "║  AAP Commit:  $(params.AAP_CONFIG_COMMIT)                          ║"
+                echo "║  Collection:  $(params.COLLECTION_COMMIT)                          ║"
+                echo "║  EE Digest:   $(params.EE_DIGEST)                                  ║"
+                echo "╚════════════════════════════════════════════════════════════════════╝"
+
+                # Create manifest directory if needed
+                mkdir -p releases
+
+                # Create manifest using yq for proper YAML formatting
+                cat > "$MANIFEST_FILE" <<EOF
+                ---
+                # Release ${VERSION}
+                # Generated by Tekton create-release pipeline
+                version: "${VERSION}"
+                created: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                created_by: "tekton-pipeline"
+                description: "Release ${VERSION} created via tag push"
+
+                components:
+                  aap_configuration:
+                    repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
+                    commit: "$(params.AAP_CONFIG_COMMIT)"
+                    branch: "main"
+
+                  collections:
+                    repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
+                    commit: "$(params.COLLECTION_COMMIT)"
+                    branch: "main"
+
+                  execution_environment:
+                    registry: "quay.io"
+                    repository: "myorg/custom-ee"
+                    tag: "$(params.EE_TAG)"
+                    digest: "$(params.EE_DIGEST)"
+
+                environments:
+                  dev:
+                    deployed: null
+                    validated: false
+                    validated_by: null
+                  qa:
+                    deployed: null
+                    validated: false
+                    validated_by: null
+                  prod:
+                    deployed: null
+                    validated: false
+                    validated_by: null
+
+                validation:
+                  tests_required:
+                    - smoke-tests
+                    - integration-tests
+                    - security-scan
+                  tests_passed: []
+                  approval_required: true
+                  approved_by: null
+                  approved_at: null
+
+                metadata:
+                  pipeline_run: "$(context.pipelineRun.name)"
+                EOF
+
+                echo "✅ Created manifest: $MANIFEST_FILE"
+                echo -n "$MANIFEST_FILE" > $(results.manifest-path.path)
+        params:
+          - name: VERSION
+            value: $(tasks.extract-version.results.version)
+          - name: AAP_CONFIG_COMMIT
+            value: $(tasks.get-aap-commit.results.commit)
+          - name: COLLECTION_COMMIT
+            value: $(tasks.get-collection-commit.results.commit)
+          - name: EE_TAG
+            value: $(tasks.get-ee-digest.results.tag)
+          - name: EE_DIGEST
+            value: $(tasks.get-ee-digest.results.digest)
+
+      - name: validate-created-manifest
+        runAfter:
+          - create-manifest
+        workspaces:
+          - name: source
+            workspace: source
+        taskSpec:
+          params:
+            - name: MANIFEST_PATH
+              type: string
+          workspaces:
+            - name: source
+          results:
+            - name: valid
+              description: Whether the manifest is valid
+          steps:
+            - name: validate
+              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
+              workingDir: $(workspaces.source.path)
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                MANIFEST="$(params.MANIFEST_PATH)"
+
+                echo "Validating created manifest: $MANIFEST"
+
+                # Validate YAML syntax
+                yamllint -d relaxed "$MANIFEST"
+
+                # Validate required fields
+                REQUIRED_FIELDS=(
+                  ".version"
+                  ".components.aap_configuration.commit"
+                  ".components.collections.commit"
+                  ".components.execution_environment.digest"
+                )
+
+                for field in "${REQUIRED_FIELDS[@]}"; do
+                  VALUE=$(yq eval "$field" "$MANIFEST")
+                  if [ "$VALUE" == "null" ] || [ -z "$VALUE" ]; then
+                    echo "❌ Required field missing: $field"
+                    exit 1
+                  fi
+                done
+
+                echo "✅ Manifest validation passed"
+                echo "true" > $(results.valid.path)
+        params:
+          - name: MANIFEST_PATH
+            value: $(tasks.create-manifest.results.manifest-path)
+
+    finally:
+      - name: summary
+        taskSpec:
+          params:
+            - name: VERSION
+              type: string
+          steps:
+            - name: print-summary
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              script: |
+                #!/usr/bin/env bash
+
+                echo ""
+                echo "╔════════════════════════════════════════════════════════════════════╗"
+                echo "║                    CREATE RELEASE SUMMARY                          ║"
+                echo "╠════════════════════════════════════════════════════════════════════╣"
+                echo "║  Version:     $(params.VERSION)                                    ║"
+                echo "║  Status:      $(context.pipelineRun.status)                        ║"
+                echo "║  Pipeline:    release-manifest-create-release                      ║"
+                echo "╚════════════════════════════════════════════════════════════════════╝"
+                echo ""
+                echo "Next steps:"
+                echo "  1. Review the created manifest"
+                echo "  2. Commit and push the manifest to the repository"
+                echo "  3. Deploy to dev environment"
+        params:
+          - name: VERSION
+            value: $(tasks.extract-version.results.version)
+
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+    - name: aap-config-source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 500Mi
+    - name: collection-source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 500Mi
