@@ -1,0 +1,39 @@
+---
+# environments.yml
+# =====================================================================
+# ENVIRONMENT RELEASE CONFIGURATION
+# =====================================================================
+# This file maps which release version applies to each environment.
+# Updated by the promote pipeline when deploying to an environment.
+#
+# The promote pipeline:
+# 1. Reads the target release from releases/release-<version>.yaml
+# 2. Updates this file to set the environment's release version
+# 3. Applies the config to AAP using the versions from the release
+# =====================================================================
+
+environments:
+  dev:
+    # Dev always uses main/latest - not a specific release
+    release_version: "dev"
+    use_latest: true
+    scm_update_on_launch: true
+    deployed_at: null
+
+  qa:
+    # QA uses locked release versions
+    release_version: "26.1.15-0"
+    use_latest: false
+    scm_update_on_launch: false
+    deployed_at: "2026-01-15T10:00:00Z"
+    deployed_by: "tekton-pipeline"
+
+  prod:
+    # Prod uses locked release versions
+    release_version: "26.1.15-0"
+    use_latest: false
+    scm_update_on_launch: false
+    deployed_at: "2026-01-15T14:00:00Z"
+    deployed_by: "tekton-pipeline"
+    approved_by: "CAB"
+...

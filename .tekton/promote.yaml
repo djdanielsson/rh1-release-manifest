@@ -1,16 +1,9 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/tektoncd/pipeline/main/pkg/apis/pipeline/v1/swagger.json
-#
-# Promotion Pipeline
-# This pipeline is triggered manually via tkn CLI or Tekton Dashboard
-# It promotes a release from one environment to the next (dev→qa or qa→prod)
-#
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: release-manifest-promote
+  name: release-promote
   annotations:
-    # Manual trigger only - use tkn pipeline start or Tekton Dashboard
     pipelinesascode.tekton.dev/on-event: "[manual]"
     pipelinesascode.tekton.dev/task: "[git-clone]"
     pipelinesascode.tekton.dev/max-keep-runs: "10"
@@ -22,37 +15,21 @@ spec:
       value: "{{ revision }}"
     - name: version
       value: "{{ version }}"
-    - name: from_environment
-      value: "{{ from_environment }}"
-    - name: to_environment
-      value: "{{ to_environment }}"
+    - name: environment
+      value: "{{ environment }}"
   pipelineSpec:
     params:
       - name: repo_url
-        type: string
       - name: revision
-        type: string
       - name: version
-        type: string
-        description: Release version to promote (YY.M.D-PATCH format)
-      - name: from_environment
-        type: string
-        description: Source environment (dev, qa)
-      - name: to_environment
-        type: string
-        description: Target environment (qa, prod)
+        description: Release version to deploy (YY.M.D-PATCH)
+      - name: environment
+        description: Target environment (dev, qa, prod)
     workspaces:
       - name: source
-        description: Workspace for release-manifest repo
       - name: aap-config
-        description: Workspace for aap-config-as-code checkout
-    results:
-      - name: deployed-time
-        description: Deployment timestamp
-        value: $(tasks.deploy.results.deployed)
-
     tasks:
-      - name: fetch-repository
+      - name: clone-manifest-repo
         taskRef:
           name: git-clone
           kind: ClusterTask
@@ -64,118 +41,52 @@ spec:
             value: $(params.repo_url)
           - name: revision
             value: $(params.revision)
-          - name: depth
-            value: "0"
 
-      - name: validate-promotion-path
-        runAfter:
-          - fetch-repository
-        taskSpec:
-          params:
-            - name: FROM
-              type: string
-            - name: TO
-              type: string
-          results:
-            - name: valid
-              description: Whether the promotion path is valid
-          steps:
-            - name: validate
-              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
-              script: |
-                #!/usr/bin/env bash
-                set -e
-
-                FROM="$(params.FROM)"
-                TO="$(params.TO)"
-
-                echo "Validating promotion path: $FROM → $TO"
-
-                # Valid promotion paths
-                if [ "$FROM" == "dev" ] && [ "$TO" == "qa" ]; then
-                  echo "✅ Valid: dev → qa"
-                  echo "true" > $(results.valid.path)
-                elif [ "$FROM" == "qa" ] && [ "$TO" == "prod" ]; then
-                  echo "✅ Valid: qa → prod"
-                  echo "true" > $(results.valid.path)
-                else
-                  echo "❌ Invalid promotion path: $FROM → $TO"
-                  echo "Valid paths:"
-                  echo "  - dev → qa"
-                  echo "  - qa → prod"
-                  echo "false" > $(results.valid.path)
-                  exit 1
-                fi
-        params:
-          - name: FROM
-            value: $(params.from_environment)
-          - name: TO
-            value: $(params.to_environment)
-
-      - name: check-source-deployment
-        runAfter:
-          - validate-promotion-path
+      - name: read-release-manifest
+        runAfter: [clone-manifest-repo]
         workspaces:
           - name: source
             workspace: source
         taskSpec:
           params:
             - name: VERSION
-              type: string
-            - name: FROM_ENV
-              type: string
+            - name: ENVIRONMENT
           workspaces:
             - name: source
           results:
-            - name: validated
-              description: Whether source deployment was validated
-            - name: aap-commit
-              description: AAP config commit from manifest
+            - name: manifest-path
+            - name: version-mappings
+            - name: ee-tag
+            - name: playbooks-tag
           steps:
-            - name: check
+            - name: read
               image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
               workingDir: $(workspaces.source.path)
               script: |
                 #!/usr/bin/env bash
                 set -e
-
-                MANIFEST="releases/release-$(params.VERSION).yaml"
-
+                VERSION="$(params.VERSION)"
+                ENV="$(params.ENVIRONMENT)"
+                MANIFEST="releases/release-${VERSION}.yaml"
                 if [ ! -f "$MANIFEST" ]; then
-                  echo "❌ Manifest not found: $MANIFEST"
+                  echo "Manifest not found: $MANIFEST"
                   exit 1
                 fi
-
-                # Check if deployed to source environment
-                DEPLOYED=$(yq eval ".environments.$(params.FROM_ENV).deployed" "$MANIFEST")
-
-                if [ "$DEPLOYED" == "null" ]; then
-                  echo "❌ Version $(params.VERSION) has not been deployed to $(params.FROM_ENV)"
-                  exit 1
-                fi
-
-                echo "✅ Version was deployed to $(params.FROM_ENV) at: $DEPLOYED"
-
-                # Check if validated
-                VALIDATED=$(yq eval ".environments.$(params.FROM_ENV).validated" "$MANIFEST")
-                echo "$VALIDATED" > $(results.validated.path)
-
-                if [ "$VALIDATED" != "true" ]; then
-                  echo "⚠️  Warning: Version not marked as validated in $(params.FROM_ENV)"
-                fi
-
-                # Get AAP commit
-                AAP_COMMIT=$(yq eval '.components.aap_configuration.commit' "$MANIFEST")
-                echo -n "$AAP_COMMIT" > $(results.aap-commit.path)
+                echo -n "$MANIFEST" > $(results.manifest-path.path)
+                EE_TAG=$(yq eval '.components.execution_environment.tag' "$MANIFEST")
+                PLAYBOOKS_TAG=$(yq eval '.components.playbooks.tag' "$MANIFEST")
+                echo -n "$EE_TAG" > $(results.ee-tag.path)
+                echo -n "$PLAYBOOKS_TAG" > $(results.playbooks-tag.path)
+                yq eval '.version_mappings' "$MANIFEST" -o=json > $(results.version-mappings.path)
+                echo "Read manifest for $VERSION, deploying to $ENV"
         params:
           - name: VERSION
             value: $(params.version)
-          - name: FROM_ENV
-            value: $(params.from_environment)
+          - name: ENVIRONMENT
+            value: $(params.environment)
 
       - name: clone-aap-config
-        runAfter:
-          - check-source-deployment
+        runAfter: [read-release-manifest]
         taskRef:
           name: git-clone
           kind: ClusterTask
@@ -186,13 +97,10 @@ spec:
           - name: url
             value: https://github.com/djdanielsson/rh1-aap-config-as-code.git
           - name: revision
-            value: $(tasks.check-source-deployment.results.aap-commit)
-          - name: depth
-            value: "1"
+            value: main
 
-      - name: deploy
-        runAfter:
-          - clone-aap-config
+      - name: update-aap-config-files
+        runAfter: [clone-aap-config]
         workspaces:
           - name: source
             workspace: source
@@ -201,17 +109,68 @@ spec:
         taskSpec:
           params:
             - name: VERSION
-              type: string
             - name: ENVIRONMENT
-              type: string
+            - name: MANIFEST_PATH
           workspaces:
             - name: source
             - name: aap-config
-          results:
-            - name: deployed
-              description: Deployment timestamp
           steps:
-            - name: apply-configuration
+            - name: update-files
+              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
+              script: |
+                #!/usr/bin/env bash
+                set -e
+                VERSION="$(params.VERSION)"
+                ENV="$(params.ENVIRONMENT)"
+                MANIFEST="$(workspaces.source.path)/$(params.MANIFEST_PATH)"
+                AAP_CONFIG="$(workspaces.aap-config.path)"
+                echo "Updating aap-config-as-code files for $ENV with version $VERSION"
+                cd "$AAP_CONFIG"
+                for file in inventory/group_vars/all/jt_*.yml; do
+                  if [ -f "$file" ]; then
+                    FILENAME=$(basename "$file" .yml)
+                    PROJECT_VER=$(yq eval ".version_mappings.$FILENAME.project_version // \"$VERSION\"" "$MANIFEST")
+                    EE_VER=$(yq eval ".version_mappings.$FILENAME.ee_version // \"$VERSION\"" "$MANIFEST")
+                    echo "Updating $FILENAME: project=$PROJECT_VER, ee=$EE_VER"
+                    sed -i "s/release_project_.*_version\": \"[^\"]*\"/release_project_version\": \"$PROJECT_VER\"/" "$file" 2>/dev/null || true
+                    sed -i "s/release_ee_.*_version\": \"[^\"]*\"/release_ee_version\": \"$EE_VER\"/" "$file" 2>/dev/null || true
+                    yq eval -i "(.[] | select(.scm_branch) | .scm_branch) = \"$PROJECT_VER\"" "$file" 2>/dev/null || true
+                    yq eval -i "(.[] | select(.image) | .image) |= sub(\":[^:]+$\"; \":$EE_VER\")" "$file" 2>/dev/null || true
+                  fi
+                done
+                if [ "$ENV" != "dev" ]; then
+                  for file in inventory/group_vars/all/jt_*.yml; do
+                    yq eval -i "(.[] | select(.scm_update_on_launch) | .scm_update_on_launch) = false" "$file" 2>/dev/null || true
+                  done
+                fi
+                git config user.name "Tekton"
+                git config user.email "tekton@pipeline"
+                git add .
+                git commit -m "Promote $VERSION to $ENV" || true
+                echo "Files updated for $ENV"
+        params:
+          - name: VERSION
+            value: $(params.version)
+          - name: ENVIRONMENT
+            value: $(params.environment)
+          - name: MANIFEST_PATH
+            value: $(tasks.read-release-manifest.results.manifest-path)
+
+      - name: apply-to-aap
+        runAfter: [update-aap-config-files]
+        workspaces:
+          - name: aap-config
+            workspace: aap-config
+        taskSpec:
+          params:
+            - name: VERSION
+            - name: ENVIRONMENT
+          workspaces:
+            - name: aap-config
+          results:
+            - name: deployed-at
+          steps:
+            - name: apply
               image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
               workingDir: $(workspaces.aap-config.path)
               env:
@@ -234,92 +193,92 @@ spec:
               script: |
                 #!/usr/bin/env bash
                 set -e
-
-                echo "╔════════════════════════════════════════════════════════════════════╗"
-                echo "║  Promoting $(params.VERSION) to $(params.ENVIRONMENT)              ║"
-                echo "╚════════════════════════════════════════════════════════════════════╝"
-
-                # Install collections
+                VERSION="$(params.VERSION)"
+                ENV="$(params.ENVIRONMENT)"
+                echo "Applying $VERSION to $ENV"
                 ansible-galaxy collection install -r collections/requirements.yml
+                ansible-playbook playbooks/playbook.yml --limit aap_${ENV}
+                date -u +%Y-%m-%dT%H:%M:%SZ > $(results.deployed-at.path)
+                echo "Applied to $ENV"
+        params:
+          - name: VERSION
+            value: $(params.version)
+          - name: ENVIRONMENT
+            value: $(params.environment)
 
-                # Run playbook for target environment
-                ansible-playbook playbooks/playbook.yml \
-                  --limit aap_$(params.ENVIRONMENT) \
-                  -e "release_version=$(params.VERSION)"
-
-                echo "✅ Configuration applied to $(params.ENVIRONMENT)"
-
-                # Record deployment timestamp
-                date -u +%Y-%m-%dT%H:%M:%SZ > $(results.deployed.path)
-
-            - name: update-manifest
+      - name: update-env-tracking
+        runAfter: [apply-to-aap]
+        workspaces:
+          - name: source
+            workspace: source
+        taskSpec:
+          params:
+            - name: VERSION
+            - name: ENVIRONMENT
+            - name: MANIFEST_PATH
+            - name: DEPLOYED_AT
+          workspaces:
+            - name: source
+          steps:
+            - name: update
               image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
               workingDir: $(workspaces.source.path)
               script: |
                 #!/usr/bin/env bash
                 set -e
-
-                MANIFEST="releases/release-$(params.VERSION).yaml"
-                DEPLOYED_TIME=$(cat $(results.deployed.path))
-
-                echo "Updating manifest with deployment info..."
-
-                yq eval -i ".environments.$(params.ENVIRONMENT).deployed = \"$DEPLOYED_TIME\"" "$MANIFEST"
-                yq eval -i ".environments.$(params.ENVIRONMENT).validated = false" "$MANIFEST"
-
-                echo "✅ Manifest updated"
+                VERSION="$(params.VERSION)"
+                ENV="$(params.ENVIRONMENT)"
+                MANIFEST="$(params.MANIFEST_PATH)"
+                DEPLOYED="$(params.DEPLOYED_AT)"
+                yq eval -i ".environments.$ENV.deployed = \"$DEPLOYED\"" "$MANIFEST"
+                yq eval -i ".environments.$ENV.validated = false" "$MANIFEST"
+                ENV_CONFIG="config/environments.yml"
+                yq eval -i ".environments.$ENV.release_version = \"$VERSION\"" "$ENV_CONFIG"
+                yq eval -i ".environments.$ENV.deployed_at = \"$DEPLOYED\"" "$ENV_CONFIG"
+                git config user.name "Tekton"
+                git config user.email "tekton@pipeline"
+                git add "$MANIFEST" "$ENV_CONFIG"
+                git commit -m "Promoted $VERSION to $ENV"
+                echo "Tracking updated"
         params:
           - name: VERSION
             value: $(params.version)
           - name: ENVIRONMENT
-            value: $(params.to_environment)
+            value: $(params.environment)
+          - name: MANIFEST_PATH
+            value: $(tasks.read-release-manifest.results.manifest-path)
+          - name: DEPLOYED_AT
+            value: $(tasks.apply-to-aap.results.deployed-at)
 
     finally:
       - name: summary
         taskSpec:
           params:
             - name: VERSION
-              type: string
-            - name: FROM
-              type: string
-            - name: TO
-              type: string
+            - name: ENVIRONMENT
           steps:
             - name: print
               image: registry.access.redhat.com/ubi9/ubi-minimal:latest
               script: |
-                #!/usr/bin/env bash
-
-                echo ""
-                echo "╔════════════════════════════════════════════════════════════════════╗"
-                echo "║                      PROMOTION COMPLETE                            ║"
-                echo "╠════════════════════════════════════════════════════════════════════╣"
-                echo "║  Version:     $(params.VERSION)                                    ║"
-                echo "║  Path:        $(params.FROM) → $(params.TO)                        ║"
-                echo "║  Status:      $(context.pipelineRun.status)                        ║"
-                echo "╚════════════════════════════════════════════════════════════════════╝"
+                echo "Promoted $(params.VERSION) to $(params.ENVIRONMENT)"
         params:
           - name: VERSION
             value: $(params.version)
-          - name: FROM
-            value: $(params.from_environment)
-          - name: TO
-            value: $(params.to_environment)
+          - name: ENVIRONMENT
+            value: $(params.environment)
 
   workspaces:
     - name: source
       volumeClaimTemplate:
         spec:
-          accessModes:
-            - ReadWriteOnce
+          accessModes: [ReadWriteOnce]
           resources:
             requests:
               storage: 1Gi
     - name: aap-config
       volumeClaimTemplate:
         spec:
-          accessModes:
-            - ReadWriteOnce
+          accessModes: [ReadWriteOnce]
           resources:
             requests:
               storage: 500Mi
