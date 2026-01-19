@@ -227,6 +227,3 @@ EOF
           echo "| Commit SHAs | ${{ needs.validate-commit-shas.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Image Digests | ${{ needs.validate-image-digests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Production Safety | ${{ needs.check-production-safety.result }} |" >> $GITHUB_STEP_SUMMARY
-
-
-

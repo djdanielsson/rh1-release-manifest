@@ -61,6 +61,3 @@ rules:
 # Ignore certain files
 ignore: |
   .secrets.baseline
-
-
-

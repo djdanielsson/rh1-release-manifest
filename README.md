@@ -367,15 +367,15 @@ All secrets are managed via **HashiCorp Vault**:
 # Vault paths for release automation
 secret/data/release-manifest:
   github-token: "<token-for-git-operations>"
-  
+
 secret/data/aap-dev:
   controller_host: "https://aap-dev.apps.cluster.example.com"
   controller_password: "<from-vault>"
-  
+
 secret/data/aap-qa:
   controller_host: "https://aap-qa.apps.cluster.example.com"
   controller_password: "<from-vault>"
-  
+
 secret/data/aap-prod:
   controller_host: "https://aap-prod.apps.cluster.example.com"
   controller_password: "<from-vault>"
@@ -573,4 +573,3 @@ version: "26.1.6-0"
 **Last Updated**: 2025-10-29
 **Maintained By**: Platform Team
 **Questions**: File issue in this repository
-
