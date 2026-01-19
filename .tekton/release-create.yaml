@@ -1,369 +1,187 @@
----
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: release-create
+  name: release-manifest
   annotations:
+    pipelinesascode.tekton.dev/task-1: "[git-clone]"
     pipelinesascode.tekton.dev/on-event: "[push]"
     pipelinesascode.tekton.dev/on-target-branch: "[main]"
-    pipelinesascode.tekton.dev/on-path-change: "[releases/release-*.yaml]"
-    pipelinesascode.tekton.dev/task: "[git-clone]"
-    pipelinesascode.tekton.dev/max-keep-runs: "10"
+    pipelinesascode.tekton.dev/on-path-change: "./releases/**.yml"
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
 spec:
-  params:
-    - name: repo_url
-      value: "{{ repo_url }}"
-    - name: revision
-      value: "{{ revision }}"
-  pipelineSpec:
-    params:
-      - name: repo_url
-      - name: revision
-    workspaces:
-      - name: source
-      - name: playbooks
-      - name: collection
-      - name: ee
-    tasks:
-      - name: clone-manifest-repo
-        taskRef:
-          name: git-clone
-          kind: ClusterTask
-        workspaces:
-          - name: output
-            workspace: source
-        params:
-          - name: url
-            value: $(params.repo_url)
-          - name: revision
-            value: $(params.revision)
-
-      - name: detect-release
-        runAfter: [clone-manifest-repo]
-        workspaces:
-          - name: source
-            workspace: source
-        taskSpec:
-          workspaces:
-            - name: source
-          results:
-            - name: version
-            - name: manifest
-            - name: is-release
-          steps:
-            - name: detect
-              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
-              workingDir: $(workspaces.source.path)
-              script: |
-                #!/usr/bin/env bash
-                set -e
-                MANIFEST=$(ls -t releases/release-*.yaml 2>/dev/null | grep -v dev | head -1)
-                if [ -z "$MANIFEST" ]; then
-                  echo "false" > $(results.is-release.path)
-                  exit 0
-                fi
-                VERSION=$(yq eval '.version' "$MANIFEST")
-                if [[ ! "$VERSION" =~ ^[0-9]{2}\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
-                  echo "false" > $(results.is-release.path)
-                  exit 0
-                fi
-                echo "Release detected: $VERSION"
-                echo "true" > $(results.is-release.path)
-                echo -n "$VERSION" > $(results.version.path)
-                echo -n "$MANIFEST" > $(results.manifest.path)
-
-      - name: clone-playbooks
-        runAfter: [detect-release]
-        when:
-          - input: $(tasks.detect-release.results.is-release)
-            operator: in
-            values: ["true"]
-        taskRef:
-          name: git-clone
-          kind: ClusterTask
-        workspaces:
-          - name: output
-            workspace: playbooks
-        params:
-          - name: url
-            value: https://github.com/djdanielsson/rh1-automation-playbooks.git
-          - name: revision
-            value: main
-
-      - name: tag-playbooks
-        runAfter: [clone-playbooks]
-        workspaces:
-          - name: source
-            workspace: playbooks
-        taskSpec:
-          params:
-            - name: VERSION
-          workspaces:
-            - name: source
-          results:
-            - name: commit
-          steps:
-            - name: tag
-              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
-              workingDir: $(workspaces.source.path)
-              script: |
-                #!/usr/bin/env bash
-                set -e
-                VERSION="$(params.VERSION)"
-                git config user.name "Tekton"
-                git config user.email "tekton@pipeline"
-                COMMIT=$(git rev-parse HEAD)
-                echo -n "$COMMIT" > $(results.commit.path)
-                git tag -a "$VERSION" -m "Release $VERSION" 2>/dev/null || true
-                echo "Playbooks tagged: $VERSION"
-        params:
-          - name: VERSION
-            value: $(tasks.detect-release.results.version)
-
-      - name: clone-collection
-        runAfter: [detect-release]
-        when:
-          - input: $(tasks.detect-release.results.is-release)
-            operator: in
-            values: ["true"]
-        taskRef:
-          name: git-clone
-          kind: ClusterTask
-        workspaces:
-          - name: output
-            workspace: collection
-        params:
-          - name: url
-            value: https://github.com/djdanielsson/rh1-custom-collection.git
-          - name: revision
-            value: main
-
-      - name: build-publish-collection
-        runAfter: [clone-collection]
-        workspaces:
-          - name: source
-            workspace: collection
-        taskSpec:
-          params:
-            - name: VERSION
-          workspaces:
-            - name: source
-          results:
-            - name: commit
-            - name: bundle
-          steps:
-            - name: build
-              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
-              workingDir: $(workspaces.source.path)
-              env:
-                - name: GALAXY_SERVER
-                  valueFrom:
-                    secretKeyRef:
-                      name: galaxy-credentials
-                      key: server
-                      optional: true
-                - name: GALAXY_TOKEN
-                  valueFrom:
-                    secretKeyRef:
-                      name: galaxy-credentials
-                      key: token
-                      optional: true
-              script: |
-                #!/usr/bin/env bash
-                set -e
-                VERSION="$(params.VERSION)"
-                git config user.name "Tekton"
-                git config user.email "tekton@pipeline"
-                yq eval -i ".version = \"$VERSION\"" galaxy.yml
-                git add galaxy.yml
-                git commit -m "Release $VERSION" || true
-                COMMIT=$(git rev-parse HEAD)
-                echo -n "$COMMIT" > $(results.commit.path)
-                git tag -a "$VERSION" -m "Release $VERSION" 2>/dev/null || true
-                ansible-galaxy collection build -v .
-                BUNDLE=$(ls *.tar.gz | head -1)
-                echo -n "$BUNDLE" > $(results.bundle.path)
-                if [ -n "$GALAXY_TOKEN" ]; then
-                  ansible-galaxy collection publish -v --server "$GALAXY_SERVER" --token "$GALAXY_TOKEN" "$BUNDLE" || true
-                fi
-                echo "Collection built: $BUNDLE"
-        params:
-          - name: VERSION
-            value: $(tasks.detect-release.results.version)
-
-      - name: clone-ee
-        runAfter: [build-publish-collection]
-        taskRef:
-          name: git-clone
-          kind: ClusterTask
-        workspaces:
-          - name: output
-            workspace: ee
-        params:
-          - name: url
-            value: https://github.com/djdanielsson/rh1-ee.git
-          - name: revision
-            value: main
-
-      - name: build-push-ee
-        runAfter: [clone-ee]
-        workspaces:
-          - name: source
-            workspace: ee
-        taskSpec:
-          params:
-            - name: VERSION
-          workspaces:
-            - name: source
-          results:
-            - name: digest
-            - name: image
-          steps:
-            - name: build
-              image: quay.io/ansible/ansible-builder:latest
-              workingDir: $(workspaces.source.path)
-              script: |
-                #!/usr/bin/env bash
-                set -e
-                VERSION="$(params.VERSION)"
-                IMAGE="quay.io/myorg/custom-ee:$VERSION"
-                yq eval -i "(.collections[] | select(.name == \"myorg.custom_collection\")).version = \"$VERSION\"" requirements.yml 2>/dev/null || true
-                ansible-builder build --tag "$IMAGE" --container-runtime podman -v 2 || true
-                DIGEST=$(podman inspect "$IMAGE" --format '{{.Digest}}' 2>/dev/null || echo "sha256:0000000000000000000000000000000000000000000000000000000000000000")
-                echo -n "$DIGEST" > $(results.digest.path)
-                echo -n "$IMAGE" > $(results.image.path)
-                echo "EE built: $IMAGE"
-        params:
-          - name: VERSION
-            value: $(tasks.detect-release.results.version)
-
-      - name: update-manifest
-        runAfter: [tag-playbooks, build-publish-collection, build-push-ee]
-        workspaces:
-          - name: source
-            workspace: source
-        taskSpec:
-          params:
-            - name: VERSION
-            - name: MANIFEST
-            - name: PLAYBOOKS_COMMIT
-            - name: COLLECTION_COMMIT
-            - name: EE_DIGEST
-          workspaces:
-            - name: source
-          steps:
-            - name: update
-              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
-              workingDir: $(workspaces.source.path)
-              script: |
-                #!/usr/bin/env bash
-                set -e
-                VERSION="$(params.VERSION)"
-                MANIFEST="$(params.MANIFEST)"
-                yq eval -i ".components.playbooks.commit = \"$(params.PLAYBOOKS_COMMIT)\"" "$MANIFEST"
-                yq eval -i ".components.playbooks.tag = \"$VERSION\"" "$MANIFEST"
-                yq eval -i ".components.collections.commit = \"$(params.COLLECTION_COMMIT)\"" "$MANIFEST"
-                yq eval -i ".components.collections.tag = \"$VERSION\"" "$MANIFEST"
-                yq eval -i ".components.execution_environment.digest = \"$(params.EE_DIGEST)\"" "$MANIFEST"
-                yq eval -i ".components.execution_environment.tag = \"$VERSION\"" "$MANIFEST"
-                for key in $(yq eval '.version_mappings | keys | .[]' "$MANIFEST"); do
-                  yq eval -i ".version_mappings.$key.project_version = \"$VERSION\"" "$MANIFEST"
-                  yq eval -i ".version_mappings.$key.ee_version = \"$VERSION\"" "$MANIFEST"
-                done
-                yq eval -i ".created = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" "$MANIFEST"
-                yq eval -i ".created_by = \"tekton-pipeline\"" "$MANIFEST"
-                git config user.name "Tekton"
-                git config user.email "tekton@pipeline"
-                git add "$MANIFEST"
-                git commit -m "Release $VERSION: Build artifacts"
-                git tag -a "$VERSION" -m "Release $VERSION"
-                echo "Manifest updated: $MANIFEST"
-        params:
-          - name: VERSION
-            value: $(tasks.detect-release.results.version)
-          - name: MANIFEST
-            value: $(tasks.detect-release.results.manifest)
-          - name: PLAYBOOKS_COMMIT
-            value: $(tasks.tag-playbooks.results.commit)
-          - name: COLLECTION_COMMIT
-            value: $(tasks.build-publish-collection.results.commit)
-          - name: EE_DIGEST
-            value: $(tasks.build-push-ee.results.digest)
-
-      - name: update-env-config
-        runAfter: [update-manifest]
-        workspaces:
-          - name: source
-            workspace: source
-        taskSpec:
-          params:
-            - name: VERSION
-          workspaces:
-            - name: source
-          steps:
-            - name: update
-              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
-              workingDir: $(workspaces.source.path)
-              script: |
-                #!/usr/bin/env bash
-                set -e
-                VERSION="$(params.VERSION)"
-                CONFIG="config/release-versions.yml"
-                yq eval -i ".ee_plat_automation_version = \"$VERSION\"" "$CONFIG"
-                yq eval -i ".project_plat_webserver_config_playbooks_version = \"$VERSION\"" "$CONFIG"
-                yq eval -i ".project_plat_database_config_playbooks_version = \"$VERSION\"" "$CONFIG"
-                yq eval -i ".project_plat_monitoring_config_playbooks_version = \"$VERSION\"" "$CONFIG"
-                yq eval -i ".project_plat_backup_config_playbooks_version = \"$VERSION\"" "$CONFIG"
-                yq eval -i ".collection_myorg_custom_collection_version = \"$VERSION\"" "$CONFIG"
-                yq eval -i ".current_version = \"$VERSION\"" "$CONFIG"
-                yq eval -i ".created_at = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" "$CONFIG"
-                git add "$CONFIG"
-                git commit -m "Release $VERSION: Update config" --amend
-                echo "Config updated"
-        params:
-          - name: VERSION
-            value: $(tasks.detect-release.results.version)
-
-    finally:
-      - name: summary
-        taskSpec:
-          params:
-            - name: VERSION
-          steps:
-            - name: print
-              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
-              script: |
-                echo "Release $(params.VERSION) complete"
-        params:
-          - name: VERSION
-            value: $(tasks.detect-release.results.version)
-
   workspaces:
-    - name: source
-      volumeClaimTemplate:
-        spec:
-          accessModes: [ReadWriteOnce]
-          resources:
-            requests:
-              storage: 1Gi
-    - name: playbooks
-      volumeClaimTemplate:
-        spec:
-          accessModes: [ReadWriteOnce]
-          resources:
-            requests:
-              storage: 500Mi
-    - name: collection
-      volumeClaimTemplate:
-        spec:
-          accessModes: [ReadWriteOnce]
-          resources:
-            requests:
-              storage: 500Mi
-    - name: ee
-      volumeClaimTemplate:
-        spec:
-          accessModes: [ReadWriteOnce]
-          resources:
-            requests:
-              storage: 2Gi
+  - name: repos-workspace
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+
+  pipelineSpec:
+    workspaces:
+    - name: repos-workspace
+    tasks:
+      - name: fetch-rh1-release-manifest-repo-source
+        taskRef:
+          name: git-clone
+        params:
+        - name: url
+          value: "{{ repo_url }}"
+        - name: revision
+          value: "{{ revision }}"
+        - name: verbose
+          value: "true"
+        - name: subdirectory
+          value: "rh1-release-manifest"
+        workspaces:
+        - name: output
+          workspace: repos-workspace
+
+      - name: check-for-release-file
+        runAfter:
+        - fetch-rh1-release-manifest-repo-source
+        taskSpec:
+          workspaces:
+          - name: repos-workspace
+          steps:
+          - name: check-for-release-file
+            workingDir: $(workspaces.shared-workspace.path)/rh1-release-manifest
+            image: registry.redhat.io/openshift4/ose-tools-rhel9 #todo find upstream image
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+              if [[ -f "./releases/release-{{ revision }}.yml" ]]; then
+                echo "Release file found"
+                exit 1
+              else
+                echo "Release file missing"
+                exit 1
+              fi
+
+      - name: fetch-rh1-custom-collection-repo-source
+        runAfter:
+        - check-for-release-file
+        taskRef:
+          name: git-clone
+        params:
+        - name: url
+          value: "https://github.com/djdanielsson/rh1-custom-collection.git"
+        - name: revision
+          value: "main"
+        - name: verbose
+          value: "true"
+        - name: subdirectory
+          value: "rh1-custom-collection"
+        workspaces:
+        - name: output
+          workspace: repos-workspace
+
+      - name: fetch-rh1-automation-playbooks-repo-source
+        runAfter:
+        - fetch-rh1-custom-collection-repo-source
+        taskRef:
+          name: git-clone
+        params:
+        - name: url
+          value: "https://github.com/djdanielsson/rh1-automation-playbooks.git"
+        - name: revision
+          value: "main"
+        - name: verbose
+          value: "true"
+        - name: subdirectory
+          value: "rh1-automation-playbooks"
+        workspaces:
+        - name: output
+          workspace: repos-workspace
+
+      - name: fetch-rh1-ee-repo-source
+        runAfter:
+        - fetch-rh1-automation-playbooks-repo-source
+        taskRef:
+          name: git-clone
+        params:
+        - name: url
+          value: "https://github.com/djdanielsson/rh1-ee.git"
+        - name: revision
+          value: "main"
+        - name: verbose
+          value: "true"
+        - name: subdirectory
+          value: "rh1-ee"
+        workspaces:
+        - name: output
+          workspace: repos-workspace
+
+      - name: fetch-rh1-aap-config-as-code-repo-source
+        runAfter:
+        - fetch-rh1-ee-repo-source
+        taskRef:
+          name: git-clone
+        params:
+        - name: url
+          value: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
+        - name: revision
+          value: "main"
+        - name: verbose
+          value: "true"
+        - name: subdirectory
+          value: "rh1-aap-config-as-code"
+        workspaces:
+        - name: output
+          workspace: repos-workspace
+
+      - name: tag-and-push-rh1-automation-playbooks-repo
+        runAfter:
+        - fetch-rh1-aap-config-as-code-repo-source
+        taskRef:
+          name: git-cli
+        params:
+        - name: verbose
+          value: "true"
+        - name: git_user_name
+          value: "release-bot"
+        - name: git_script
+          value: |
+            git tag -a v$(date +%Y.%m.%d) -m "Release tag for $(date +%Y.%m.%d)"
+
+      - name: tag-and-push-rh1-custom-collection-playbooks-repo
+        runAfter:
+        - fetch-rh1-rh1-automation-playbooks-repo-source
+        taskRef:
+          name: git-cli
+        params:
+        - name: verbose
+          value: "true"
+        - name: git_user_name
+          value: "release-bot"
+        - name: git_script
+          value: |
+            git tag -a v$(date +%Y.%m.%d) -m "Release tag for $(date +%Y.%m.%d)"
+
+      - name: tag-and-push-rh1-ee-repo
+        runAfter:
+        - fetch-rh1-custom-collection-repo-source
+        taskRef:
+          name: git-cli
+        params:
+        - name: verbose
+          value: "true"
+        - name: git_user_name
+          value: "release-bot"
+        - name: git_script
+          value: |
+
+      - name: tag-and-push-rh1-aap-config-as-code-repo
+        runAfter:
+        - fetch-rh1-ee-repo-source
+        taskRef:
+          name: git-cli
+        params:
+        - name: verbose
+          value: "true"
+        - name: git_user_name
+          value: "release-bot"
+        - name: git_script
+          value: |
