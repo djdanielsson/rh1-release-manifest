@@ -9,21 +9,22 @@ description: "Platform configuration update with improved monitoring and databas
 components:
   playbooks:
     repository: "https://github.com/djdanielsson/rh1-automation-playbooks.git"
-    commit: "pending"  # Set by release-create pipeline
+    commit: "4c7762a1a5d635429e554575b3c756b29dc7cda6"  # Set by release-create pipeline
     tag: "26.1.16-0"
   collections:
     repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
-    commit: "pending"  # Set by release-create pipeline
+    commit: "54d6c638e1dcdddd2886833dacd137f557ef7f78"  # Set by release-create pipeline
     tag: "26.1.16-0"
     galaxy_version: "26.1.16-0"
   execution_environment:
     registry: "quay.io"
     repository: "myorg/custom-ee"
     tag: "26.1.16-0"
+    commit: "499c4ed4962e3b8ecc001cda82310cf354c4c898"
     digest: "pending"  # Set by release-create pipeline
   aap_configuration:
     repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
-    commit: "pending"  # Set by promote pipeline
+    commit: "8611088b90c3cbd5afe70b82d1dc36337ee06891"  # Set by promote pipeline
     branch: "main"
 
 # Version mappings for aap-config-as-code files
