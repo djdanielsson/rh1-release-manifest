@@ -6,7 +6,6 @@ metadata:
     pipelinesascode.tekton.dev/task-1: "[git-clone]"
     pipelinesascode.tekton.dev/on-event: "[push]"
     pipelinesascode.tekton.dev/on-target-branch: "[main]"
-    pipelinesascode.tekton.dev/on-path-change: "./releases/**.yml"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
 spec:
   workspaces:
