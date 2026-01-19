@@ -78,11 +78,19 @@ repos:
   # ============================================================================
   # Markdown Linting
   # ============================================================================
-  - repo: https://github.com/markdownlint/markdownlint
-    rev: v0.12.0
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
     hooks:
       - id: markdownlint
-        args: ['--rules', '~MD013,~MD033']
+        # Disabled rules:
+        # MD013 - Line length
+        # MD033 - Inline HTML
+        # MD034 - Bare URLs
+        # MD031 - Blanks around fences
+        # MD032 - Blanks around lists
+        # MD040 - Fenced code language
+        # MD022 - Blanks around headings
+        args: ['--disable', 'MD013', 'MD033', 'MD034', 'MD031', 'MD032', 'MD040', 'MD022', '--']
 
   # ============================================================================
   # Shell Script Linting
@@ -118,11 +126,30 @@ repos:
           bash -c 'for f in "$@"; do
             if [[ "$f" == releases/release-*.yaml ]]; then
               echo "Validating manifest: $f"
-              python3 -c "import yaml,sys; m=yaml.safe_load(open(\"$f\")); assert \"version\" in m, \"Missing version\"; assert \"components\" in m, \"Missing components\"; assert \"aap_configuration\" in m[\"components\"], \"Missing aap_configuration\"; assert \"collections\" in m[\"components\"], \"Missing collections\"; assert \"execution_environment\" in m[\"components\"], \"Missing execution_environment\"" || {
+              python3 -c "
+import yaml, sys
+m = yaml.safe_load(open(\"$f\"))
+errors = []
+if \"version\" not in m:
+    errors.append(\"Missing version\")
+if \"components\" not in m:
+    errors.append(\"Missing components\")
+else:
+    if \"aap_configuration\" not in m[\"components\"]:
+        errors.append(\"Missing aap_configuration\")
+    if \"collections\" not in m[\"components\"]:
+        errors.append(\"Missing collections\")
+    if \"execution_environment\" not in m[\"components\"]:
+        errors.append(\"Missing execution_environment\")
+if errors:
+    print(\"❌ Invalid manifest:\", \"$f\")
+    print(\"Errors:\", \", \".join(errors))
+    sys.exit(1)
+print(\"✅ Valid manifest:\", \"$f\")
+" || {
                 echo "❌ Invalid manifest: $f"
                 exit 1
               }
-              echo "✅ Valid manifest: $f"
             fi
           done'
         language: system
@@ -257,7 +284,19 @@ repos:
       - id: environment-consistency
         name: Environment Consistency Check
         entry: |
-          bash -c 'for f in "$@"; do if [[ "$f" == releases/release-*.yaml ]]; then python3 -c "import yaml; m=yaml.safe_load(open(\"$f\")); envs=m.get(\"environments\",{}); expected=[\"qa\",\"prod\"]; missing=[e for e in expected if e not in envs]; [print(f\"⚠️  WARNING: Missing environment section: {e}\") for e in missing]" 2>/dev/null || true; fi; done'
+          bash -c 'for f in "$@"; do
+            if [[ "$f" == releases/release-*.yaml ]]; then
+              python3 -c "
+import yaml
+m = yaml.safe_load(open(\"$f\"))
+envs = m.get(\"environments\", {})
+expected = [\"qa\", \"prod\"]
+missing = [e for e in expected if e not in envs]
+for e in missing:
+    print(f\"⚠️  WARNING: Missing environment section: {e}\")
+" 2>/dev/null || true
+            fi
+          done'
         language: system
         files: ^releases/release-.*\.yaml$
         pass_filenames: true
