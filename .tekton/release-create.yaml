@@ -141,11 +141,11 @@ spec:
         taskRef:
           name: git-cli
         params:
-        - name: verbose
+        - name: VERBOSE
           value: "true"
-        - name: git_user_name
+        - name: GIT_USER_NAME
           value: "release-bot"
-        - name: git_script
+        - name: GIT_SCRIPT
           value: |
             cd rh1-automation-playbooks
             git tag -f {{ git_tag }}
