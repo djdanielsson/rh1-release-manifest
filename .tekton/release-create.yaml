@@ -54,7 +54,8 @@ spec:
             script: |
               #!/usr/bin/env sh
               set -eu
-              if [[ -f "./release-{{ revision }}.yml" ]]; then
+              echo "Looking for release file release-{{ revision }}.yml"
+              if [[ -f "release-{{ revision }}.yml" ]]; then
                 echo "Release file found"
                 exit 1
               else
