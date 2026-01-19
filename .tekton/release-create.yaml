@@ -149,8 +149,8 @@ spec:
           value: |
             git config --global --add safe.directory $(workspaces.source.path)/rh1-automation-playbooks
             cd rh1-automation-playbooks
-            git tag {{ git_tag }}
-            git push origin {{ git_tag }}
+            git tag -f {{ git_tag }}
+            git push origin {{ git_tag }} --force
         workspaces:
           - name: source
             workspace: repos-workspace
