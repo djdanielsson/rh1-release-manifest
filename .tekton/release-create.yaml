@@ -147,6 +147,7 @@ spec:
           value: "release-bot"
         - name: GIT_SCRIPT
           value: |
+            git config --global --add safe.directory .
             cd rh1-automation-playbooks
             git tag -f {{ git_tag }}
             git push origin {{ git_tag }} --force
