@@ -4,6 +4,7 @@ metadata:
   name: release-manifest
   annotations:
     pipelinesascode.tekton.dev/task-1: "[git-clone]"
+    pipelinesascode.tekton.dev/task-2: "[git-cli]"
     pipelinesascode.tekton.dev/on-event: "[push]"
     pipelinesascode.tekton.dev/on-target-branch: "[refs/tags/*]"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
