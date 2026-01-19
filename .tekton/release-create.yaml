@@ -148,7 +148,7 @@ spec:
 
       - name: tag-and-push-rh1-custom-collection-playbooks-repo
         runAfter:
-        - fetch-rh1-rh1-automation-playbooks-repo-source
+        - fetch-rh1-automation-playbooks-repo-source
         taskRef:
           name: git-cli
         params:
