@@ -49,12 +49,12 @@ spec:
           - name: repos-workspace
           steps:
           - name: check-for-release-file
-            workingDir: $(workspaces.repos-workspace.path)/rh1-release-manifest
+            workingDir: $(workspaces.repos-workspace.path)/rh1-release-manifest/releases/
             image: registry.redhat.io/openshift4/ose-tools-rhel9 #todo find upstream image
             script: |
               #!/usr/bin/env sh
               set -eu
-              if [[ -f "./releases/release-{{ revision }}.yml" ]]; then
+              if [[ -f "./release-{{ revision }}.yml" ]]; then
                 echo "Release file found"
                 exit 1
               else
