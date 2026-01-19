@@ -10,6 +10,9 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
 spec:
   workspaces:
+  - name: git-credentials
+    secret:
+      secretName: git-credentials
   - name: repos-workspace
     volumeClaimTemplate:
       spec:
@@ -50,14 +53,14 @@ spec:
           steps:
           - name: check-for-release-file
             workingDir: $(workspaces.repos-workspace.path)/rh1-release-manifest/releases/
-            image: registry.redhat.io/openshift4/ose-tools-rhel9 #todo find upstream image
+            image: registry.redhat.io/openshift4/ose-tools-rhel9
             script: |
               #!/usr/bin/env sh
               set -eu
               echo "Looking for release file release-{{ git_tag }}.yml"
               if [[ -f "release-{{ git_tag }}.yml" ]]; then
                 echo "Release file found"
-                exit 1
+                exit 0
               else
                 echo "Release file missing"
                 exit 1
@@ -147,44 +150,47 @@ spec:
           value: "release-bot"
         - name: git_script
           value: |
-            git tag -a v$(date +%Y.%m.%d) -m "Release tag for $(date +%Y.%m.%d)"
+            git tag -f {{ git_tag }}
+            git push origin {{ git_tag }} --force
 
-      - name: tag-and-push-rh1-custom-collection-playbooks-repo
-        runAfter:
-        - fetch-rh1-automation-playbooks-repo-source
-        taskRef:
-          name: git-cli
-        params:
-        - name: verbose
-          value: "true"
-        - name: git_user_name
-          value: "release-bot"
-        - name: git_script
-          value: |
-            git tag -a v$(date +%Y.%m.%d) -m "Release tag for $(date +%Y.%m.%d)"
+      # - name: tag-and-push-rh1-custom-collection-playbooks-repo
+      #   runAfter:
+      #   - fetch-rh1-automation-playbooks-repo-source
+      #   taskRef:
+      #     name: git-cli
+      #   params:
+      #   - name: verbose
+      #     value: "true"
+      #   - name: git_user_name
+      #     value: "release-bot"
+      #   - name: git_script
+      #     value: |
+      #       git tag -a {{ git_tag }} -m "Release tag for {{ git_tag }}"
 
-      - name: tag-and-push-rh1-ee-repo
-        runAfter:
-        - fetch-rh1-custom-collection-repo-source
-        taskRef:
-          name: git-cli
-        params:
-        - name: verbose
-          value: "true"
-        - name: git_user_name
-          value: "release-bot"
-        - name: git_script
-          value: |
+      # - name: tag-and-push-rh1-ee-repo
+      #   runAfter:
+      #   - fetch-rh1-custom-collection-repo-source
+      #   taskRef:
+      #     name: git-cli
+      #   params:
+      #   - name: verbose
+      #     value: "true"
+      #   - name: git_user_name
+      #     value: "release-bot"
+      #   - name: git_script
+      #     value: |
+      #       git tag -a {{ git_tag }} -m "Release tag for {{ git_tag }}"
 
-      - name: tag-and-push-rh1-aap-config-as-code-repo
-        runAfter:
-        - fetch-rh1-ee-repo-source
-        taskRef:
-          name: git-cli
-        params:
-        - name: verbose
-          value: "true"
-        - name: git_user_name
-          value: "release-bot"
-        - name: git_script
-          value: |
+      # - name: tag-and-push-rh1-aap-config-as-code-repo
+      #   runAfter:
+      #   - fetch-rh1-ee-repo-source
+      #   taskRef:
+      #     name: git-cli
+      #   params:
+      #   - name: verbose
+      #     value: "true"
+      #   - name: git_user_name
+      #     value: "release-bot"
+      #   - name: git_script
+      #     value: |
+      #       git tag -a {{ git_tag }} -m "Release tag for {{ git_tag }}"
