@@ -42,12 +42,14 @@ spec:
       - name: check-for-release-file
         runAfter:
         - fetch-rh1-release-manifest-repo-source
+        workspaces:
+          - name: repos-workspace
         taskSpec:
           workspaces:
           - name: repos-workspace
           steps:
           - name: check-for-release-file
-            workingDir: $(workspaces.shared-workspace.path)/rh1-release-manifest
+            workingDir: $(workspaces.repos-workspace.path)/rh1-release-manifest
             image: registry.redhat.io/openshift4/ose-tools-rhel9 #todo find upstream image
             script: |
               #!/usr/bin/env sh
