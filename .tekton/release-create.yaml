@@ -30,7 +30,7 @@ spec:
         - name: url
           value: "{{ repo_url }}"
         - name: revision
-          value: "{{ revision }}"
+          value: "{{ git_tag }}"
         - name: verbose
           value: "true"
         - name: subdirectory
@@ -54,8 +54,8 @@ spec:
             script: |
               #!/usr/bin/env sh
               set -eu
-              echo "Looking for release file release-{{ revision }}.yml"
-              if [[ -f "release-{{ revision }}.yml" ]]; then
+              echo "Looking for release file release-{{ git_tag }}.yml"
+              if [[ -f "release-{{ git_tag }}.yml" ]]; then
                 echo "Release file found"
                 exit 1
               else
