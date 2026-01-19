@@ -35,7 +35,7 @@ automation-release-manifest/
 ├── .gitignore                      # Git ignore patterns
 ├── releases/                       # Release manifest files
 │   ├── release-dev.yaml            # Dev manifest (always HEAD)
-│   └── release-25.01.05.0.yaml     # Versioned releases
+│   └── release-26.1.5-0.yaml     # Versioned releases
 ├── schemas/                        # JSON schemas
 │   └── release-manifest-schema.json
 ├── templates/                      # Template manifests
@@ -44,7 +44,7 @@ automation-release-manifest/
 │   ├── kustomization.yaml          # Deploy with: oc apply -k tekton/
 │   ├── README.md                   # Tekton usage documentation
 │   ├── tasks/
-│   │   ├── validate-version.yaml   # Validate YY.MM.DD.PATCH format
+│   │   ├── validate-version.yaml   # Validate YY.M.D-PATCH format
 │   │   ├── create-manifest.yaml    # Create release manifest
 │   │   ├── validate-manifest.yaml  # Validate manifest structure
 │   │   ├── promote-environment.yaml # Deploy to environment
@@ -66,8 +66,8 @@ automation-release-manifest/
 
 ```yaml
 ---
-# Release Manifest 26.01.06.0
-version: "26.01.06.0"
+# Release Manifest 26.1.6-0
+version: "26.1.6-0"
 created: "2025-10-29T10:00:00Z"
 created_by: "platform-team"
 description: "Initial production release"
@@ -89,7 +89,7 @@ components:
   execution_environment:
     registry: "quay.io"
     repository: "myorg/custom-ee"
-    tag: "26.01.06.0"
+    tag: "26.1.6-0"
     digest: "sha256:fedcba987654321..."
 
 environments:
@@ -127,7 +127,7 @@ cd ../automation-collection-example
 COLLECTION_SHA=$(git rev-parse HEAD)
 
 # Get EE image digest
-EE_DIGEST=$(podman inspect quay.io/myorg/custom-ee:26.01.06.0 \
+EE_DIGEST=$(podman inspect quay.io/myorg/custom-ee:26.1.6-0 \
   --format='{{.Digest}}')
 ```
 
@@ -135,20 +135,20 @@ EE_DIGEST=$(podman inspect quay.io/myorg/custom-ee:26.01.06.0 \
 
 ```bash
 # Use the template
-cp templates/release-template.yaml releases/release-26.01.06.0.yaml
+cp templates/release-template.yaml releases/release-26.1.6-0.yaml
 
 # Edit with actual values
-vi releases/release-26.01.06.0.yaml
+vi releases/release-26.1.6-0.yaml
 ```
 
 ### 3. Commit and Tag
 
 ```bash
-git add releases/release-26.01.06.0.yaml
-git commit -m "Release 26.01.06.0: Initial production release"
-git tag -a 26.01.06.0 -m "Release 26.01.06.0"
+git add releases/release-26.1.6-0.yaml
+git commit -m "Release 26.1.6-0: Initial production release"
+git tag -a 26.1.6-0 -m "Release 26.1.6-0"
 git push origin main
-git push origin 26.01.06.0
+git push origin 26.1.6-0
 ```
 
 ## Tekton Pipelines
@@ -168,7 +168,7 @@ Creates a new release manifest by locking component versions:
 
 ```bash
 tkn pipeline start create-release \
-  -p VERSION=25.01.05.0 \
+  -p VERSION=26.1.5-0 \
   -p DESCRIPTION="Initial release" \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
   -w name=aap-config-source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -183,7 +183,7 @@ Promotes a validated release from one environment to the next:
 ```bash
 # Dev → QA
 tkn pipeline start promote \
-  -p VERSION=25.01.05.0 \
+  -p VERSION=26.1.5-0 \
   -p FROM_ENVIRONMENT=dev \
   -p TO_ENVIRONMENT=qa \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -191,7 +191,7 @@ tkn pipeline start promote \
 
 # QA → Prod (requires approval)
 tkn pipeline start promote \
-  -p VERSION=25.01.05.0 \
+  -p VERSION=26.1.5-0 \
   -p FROM_ENVIRONMENT=qa \
   -p TO_ENVIRONMENT=prod \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -205,15 +205,15 @@ Rolls back an environment to a previous release version:
 ```bash
 # Rollback QA
 tkn pipeline start rollback \
-  -p TARGET_VERSION=25.01.04.0 \
+  -p TARGET_VERSION=26.1.4-0 \
   -p ENVIRONMENT=qa \
-  -p REASON="Bug found in 25.01.05.0" \
+  -p REASON="Bug found in 26.1.5-0" \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
   -w name=aap-config,volumeClaimTemplateFile=pvc-template.yaml
 
 # Dry-run mode (validate without applying)
 tkn pipeline start rollback \
-  -p TARGET_VERSION=25.01.04.0 \
+  -p TARGET_VERSION=26.1.4-0 \
   -p ENVIRONMENT=prod \
   -p DRY_RUN=true \
   -w name=source,volumeClaimTemplateFile=pvc-template.yaml \
@@ -249,9 +249,9 @@ See `tekton/README.md` for complete documentation
 ```
 1. Issue Detected in Prod
    ↓
-2. Identify Last Good Manifest (e.g., 26.01.05.0)
+2. Identify Last Good Manifest (e.g., 26.1.5-0)
    ↓
-3. Run Promotion Pipeline with 26.01.05.0
+3. Run Promotion Pipeline with 26.1.5-0
    ↓
 4. All components rolled back atomically
    ↓
@@ -273,7 +273,7 @@ See `tekton/README.md` for complete documentation
 ### Transitions
 
 ```yaml
-# releases/release-26.01.06.0.yaml
+# releases/release-26.1.6-0.yaml
 
 # Initial state
 environments:
@@ -321,9 +321,9 @@ Rollback is implemented as a dedicated Tekton pipeline that:
 ```bash
 # Rollback prod to previous version
 tkn pipeline start rollback \
-  -p TARGET_VERSION=25.01.04.0 \
+  -p TARGET_VERSION=26.1.4-0 \
   -p ENVIRONMENT=prod \
-  -p REASON="Critical bug in 25.01.05.0"
+  -p REASON="Critical bug in 26.1.5-0"
 ```
 
 See `tekton/pipelines/rollback.yaml` for implementation details.
@@ -335,7 +335,7 @@ See `tekton/pipelines/rollback.yaml` for implementation details.
 For local manifest schema validation:
 
 ```bash
-python scripts/validate-manifest-schema.py releases/release-25.01.05.0.yaml
+python scripts/validate-manifest-schema.py releases/release-26.1.5-0.yaml
 ```
 
 ### Manifest Creation (Tekton)
@@ -344,12 +344,12 @@ The preferred method to create manifests is via the Tekton pipeline:
 
 ```bash
 tkn pipeline start create-release \
-  -p VERSION=25.01.05.0 \
+  -p VERSION=26.1.5-0 \
   -p DESCRIPTION="Release description"
 ```
 
 This pipeline:
-1. Validates version format (YY.MM.DD.PATCH)
+1. Validates version format (YY.M.D-PATCH)
 2. Clones aap-config-as-code and gets HEAD SHA
 3. Clones collection repo and gets HEAD SHA
 4. Gets EE image digest via skopeo
@@ -383,14 +383,14 @@ secret/data/aap-prod:
 
 ## Best Practices
 
-### 1. CalVer Versioning (YY.MM.DD.PATCH)
+### 1. CalVer Versioning (YY.M.D-PATCH)
 
 This platform uses Calendar Versioning:
 
 ```
-25.01.05.0 - January 5, 2025, initial release
-25.01.05.1 - January 5, 2025, hotfix 1
-25.01.06.0 - January 6, 2025, new release
+26.1.5-0 - January 5, 2025, initial release
+26.1.5-1 - January 5, 2025, hotfix 1
+26.1.6-0 - January 6, 2025, new release
 ```
 
 See [VERSIONING-STRATEGY.md](../docs/VERSIONING-STRATEGY.md) for complete details.
@@ -405,7 +405,7 @@ commit: "abc123def456789012345678901234567890abcd"
 
 # Bad
 commit: "main"
-commit: "26.01.06.0"
+commit: "26.1.6-0"
 ```
 
 ### 3. Use Image Digests
@@ -450,10 +450,10 @@ validation:
 
 ```bash
 # Validate YAML syntax
-yamllint releases/release-26.01.06.0.yaml
+yamllint releases/release-26.1.6-0.yaml
 
 # Check structure
-yq eval '.' releases/release-26.01.06.0.yaml
+yq eval '.' releases/release-26.1.6-0.yaml
 ```
 
 ### Component Not Found
@@ -488,7 +488,7 @@ curl -X POST http://el-release-management-listener:8080 \
   -H "Content-Type: application/json" \
   -d '{
     "action": "create-release",
-    "version": "25.01.05.0",
+    "version": "26.1.5-0",
     "description": "Initial release"
   }'
 
@@ -497,7 +497,7 @@ curl -X POST http://el-release-management-listener:8080 \
   -H "Content-Type: application/json" \
   -d '{
     "action": "promote",
-    "version": "25.01.05.0",
+    "version": "26.1.5-0",
     "from_environment": "dev",
     "to_environment": "qa"
   }'
@@ -507,7 +507,7 @@ curl -X POST http://el-release-management-listener:8080 \
   -H "Content-Type: application/json" \
   -d '{
     "action": "rollback",
-    "version": "25.01.04.0",
+    "version": "26.1.4-0",
     "environment": "qa",
     "reason": "Bug found"
   }'
@@ -540,17 +540,17 @@ components:
 ### QA/Staging
 
 ```yaml
-# releases/release-26.01.06.0-rc1.yaml
+# releases/release-26.1.6-0-rc1.yaml
 # Release candidates for testing
-version: "26.01.06.0-rc1"
+version: "26.1.6-0-rc1"
 ```
 
 ### Production
 
 ```yaml
-# releases/release-26.01.06.0.yaml
+# releases/release-26.1.6-0.yaml
 # Stable, tested, approved releases
-version: "26.01.06.0"
+version: "26.1.6-0"
 ```
 
 ## Links

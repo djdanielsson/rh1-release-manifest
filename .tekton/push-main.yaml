@@ -1,0 +1,121 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/tektoncd/pipeline/main/pkg/apis/pipeline/v1/swagger.json
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: release-manifest-push-main
+  annotations:
+    pipelinesascode.tekton.dev/on-event: "[push]"
+    pipelinesascode.tekton.dev/on-target-branch: "[main]"
+    pipelinesascode.tekton.dev/task: "[git-clone]"
+    pipelinesascode.tekton.dev/max-keep-runs: "5"
+spec:
+  params:
+    - name: repo_url
+      value: "{{ repo_url }}"
+    - name: revision
+      value: "{{ revision }}"
+  pipelineSpec:
+    params:
+      - name: repo_url
+        type: string
+      - name: revision
+        type: string
+    workspaces:
+      - name: source
+    tasks:
+      - name: fetch-repository
+        taskRef:
+          name: git-clone
+          kind: ClusterTask
+        workspaces:
+          - name: output
+            workspace: source
+        params:
+          - name: url
+            value: $(params.repo_url)
+          - name: revision
+            value: $(params.revision)
+          - name: depth
+            value: "0"
+
+      - name: validate-release-manifests
+        runAfter:
+          - fetch-repository
+        workspaces:
+          - name: source
+            workspace: source
+        taskSpec:
+          workspaces:
+            - name: source
+          results:
+            - name: manifest-count
+              description: Number of release manifests
+            - name: latest-version
+              description: Latest release version
+          steps:
+            - name: validate-and-report
+              image: ghcr.io/ansible/community-ansible-dev-tools:v25.9.0
+              workingDir: $(workspaces.source.path)
+              script: |
+                #!/usr/bin/env bash
+                set -e
+
+                echo "╔════════════════════════════════════════════════════════════════════╗"
+                echo "║              RELEASE MANIFEST VALIDATION (PUSH TO MAIN)            ║"
+                echo "╚════════════════════════════════════════════════════════════════════╝"
+
+                MANIFEST_COUNT=0
+                LATEST_VERSION=""
+                LATEST_DATE=""
+
+                for manifest in releases/release-*.yaml; do
+                  if [ -f "$manifest" ]; then
+                    MANIFEST_COUNT=$((MANIFEST_COUNT + 1))
+
+                    VERSION=$(yq eval '.version' "$manifest")
+                    CREATED=$(yq eval '.created' "$manifest")
+
+                    echo "Found: $VERSION (created: $CREATED)"
+
+                    # Track latest by created date
+                    if [ -z "$LATEST_DATE" ] || [[ "$CREATED" > "$LATEST_DATE" ]]; then
+                      LATEST_VERSION="$VERSION"
+                      LATEST_DATE="$CREATED"
+                    fi
+                  fi
+                done
+
+                echo ""
+                echo "Total manifests: $MANIFEST_COUNT"
+                echo "Latest version: $LATEST_VERSION"
+
+                echo -n "$MANIFEST_COUNT" > $(results.manifest-count.path)
+                echo -n "$LATEST_VERSION" > $(results.latest-version.path)
+
+    finally:
+      - name: report-status
+        taskSpec:
+          steps:
+            - name: summary
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              script: |
+                #!/usr/bin/env bash
+
+                echo ""
+                echo "╔════════════════════════════════════════════════════════════════════╗"
+                echo "║              RELEASE MANIFEST PUSH VALIDATION COMPLETE             ║"
+                echo "╠════════════════════════════════════════════════════════════════════╣"
+                echo "║  Pipeline:    release-manifest-push-main                           ║"
+                echo "║  Status:      $(context.pipelineRun.status)                        ║"
+                echo "╚════════════════════════════════════════════════════════════════════╝"
+
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
