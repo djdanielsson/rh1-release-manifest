@@ -10,9 +10,6 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
 spec:
   workspaces:
-  - name: git-credentials
-    secret:
-      secretName: git-credentials
   - name: repos-workspace
     volumeClaimTemplate:
       spec:
@@ -150,8 +147,12 @@ spec:
           value: "release-bot"
         - name: git_script
           value: |
+            cd rh1-automation-playbooks
             git tag -f {{ git_tag }}
             git push origin {{ git_tag }} --force
+        workspace:
+          - name: source
+            workspace: repos-workspace
 
       # - name: tag-and-push-rh1-custom-collection-playbooks-repo
       #   runAfter:
