@@ -150,7 +150,7 @@ spec:
             cd rh1-automation-playbooks
             git tag -f {{ git_tag }}
             git push origin {{ git_tag }} --force
-        workspace:
+        workspaces:
           - name: source
             workspace: repos-workspace
 
