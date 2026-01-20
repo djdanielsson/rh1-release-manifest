@@ -168,7 +168,7 @@ spec:
         - name: GIT_SCRIPT
           value: |
             git config --global --add safe.directory $(workspaces.source.path)/rh1-custom-collection
-            cd rh1-custom-collection
+            cd $(workspaces.source.path)/rh1-custom-collection
             sed -i 's/^version:[[:space:]]*.*/version: "{{ git_tag }}"/' galaxy.yml
             git add galaxy.yml
             git commit -m "Release tag for {{ git_tag }}"
@@ -198,7 +198,7 @@ spec:
 
       - name: tag-and-push-rh1-ee-repo
         runAfter:
-        - fetch-rh1-custom-collection-repo-source
+        - wait-for-rh1-custom-collection-ci
         taskRef:
           name: git-cli
         params:
@@ -209,11 +209,9 @@ spec:
         - name: GIT_SCRIPT
           value: |
             git config --global --add safe.directory $(workspaces.source.path)/rh1-ee
-            cd rh1-ee
-
+            cd $(workspaces.source.path)/rh1-ee
             sed -i '/- name: myorg.custom_collection/{n; s/^[[:space:]]*version:.*/    version: {{ git_tag}}/}' requirements.yml
             git add requirements.yml
-
             git commit -m "Release tag for {{ git_tag }}"
             git tag -f {{ git_tag }}
             git push origin {{ git_tag }} --force
@@ -223,7 +221,7 @@ spec:
 
       - name: tag-and-push-rh1-aap-config-as-code-repo
         runAfter:
-        - fetch-rh1-ee-repo-source
+        - tag-and-push-rh1-ee-repo
         taskRef:
           name: git-cli
         params:
