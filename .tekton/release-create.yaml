@@ -211,7 +211,7 @@ spec:
             git config --global --add safe.directory $(workspaces.source.path)/rh1-ee
             cd $(workspaces.source.path)/rh1-ee
             export TAG={{ git_tag }}
-            sed -i "/- name: myorg.custom_collection/ {n\; s/^[[:space:]]*version:.*/    version: $TAG/ }" requirements.yml
+            sed -i '/- name: myorg.custom_collection/ {n; s/^[[:space:]]*version:.*/    version: '"$TAG"'/ }' requirements.yml
             git add requirements.yml
             git commit -m "Release tag for {{ git_tag }}"
             git tag -f {{ git_tag }}
