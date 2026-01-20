@@ -187,7 +187,7 @@ spec:
           workspaces:
           - name: repos-workspace
           steps:
-          - name: check-for-release-file
+          - name: Sleep 100 seconds
             image: registry.redhat.io/openshift4/ose-tools-rhel9
             script: |
               #!/usr/bin/env sh
@@ -210,7 +210,7 @@ spec:
           value: |
             git config --global --add safe.directory $(workspaces.source.path)/rh1-ee
             cd $(workspaces.source.path)/rh1-ee
-            sed -i '/- name: myorg.custom_collection/{n; s/^[[:space:]]*version:.*/    version: {{ git_tag}}/}' requirements.yml
+            sed -i '/- name: myorg.custom_collection/ {n; s/^[[:space:]]*version:.*/    version: {{ git_tag}}/ } ' requirements.yml
             git add requirements.yml
             git commit -m "Release tag for {{ git_tag }}"
             git tag -f {{ git_tag }}
