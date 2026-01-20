@@ -169,7 +169,7 @@ spec:
           value: |
             git config --global --add safe.directory $(workspaces.source.path)/rh1-custom-collection
             cd $(workspaces.source.path)/rh1-custom-collection
-            sed -i 's/^version:[[:space:]]*.*/version: "{{ git_tag }}"/' galaxy.yml
+            sed -i 's/^version:[[:space:]]*.*/version: {{ git_tag }}/' galaxy.yml
             git add galaxy.yml
             git commit -m "Release tag for {{ git_tag }}"
             git tag -f {{ git_tag }}
