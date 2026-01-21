@@ -54,7 +54,7 @@ spec:
             type: string
           steps:
           - name: check-for-release-file
-            workingDir: $(workspaces.repos-workspace.path)
+            workingDir: $(workspaces.repos-workspace.path)/rh1-release-manifest
             image: docker.io/linuxserver/yq:latest
             script: |
               #!/usr/bin/env sh
