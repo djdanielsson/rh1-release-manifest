@@ -110,8 +110,11 @@ spec:
               #!/usr/bin/env sh
               set -euo pipefail
               cp $(workspaces.shared-workspace.path)/releases/release-$(tasks.check-for-release-file.results.release-version).yml inventory/group_vars/aap_qa/release.yml
-              exit 1
-              export AAP_HOST="http://aap-qa.aap-qa.svc.cluster.local"
-              export AAP_USERNAME="admin"
-              export AAP_PASSWORD=$(params.aap-admin-password)
-              ansible-playbook -i inventory/inventory_qa.yml playbooks/playbook.yml
+              exit 0
+
+
+# exit 1
+# export AAP_HOST="http://aap-qa.aap-qa.svc.cluster.local"
+# export AAP_USERNAME="admin"
+# export AAP_PASSWORD=$(params.aap-admin-password)
+# ansible-playbook -i inventory/inventory_qa.yml playbooks/playbook.yml
