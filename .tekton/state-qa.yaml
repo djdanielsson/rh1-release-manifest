@@ -61,7 +61,7 @@ spec:
               set -eu
               echo "Looking for release in environments/qa.yml"
               export RELEASE_VERSION=$(cat environments/qa.yml | yq --raw-output0 .release_version | tr -d '\n')
-              echo $RELEASE_VERSION > $(results.release-version.path)
+              echo -n $RELEASE_VERSION > $(results.release-version.path)
               FILE="releases/release-$RELEASE_VERSION.yml"
               if [ ! -f "$FILE" ]; then
                 echo "Error: $FILE file does not exist."
