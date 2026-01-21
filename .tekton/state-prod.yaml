@@ -1,7 +1,7 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: state-qa
+  name: state-prod
   annotations:
     pipelinesascode.tekton.dev/task-1: "[git-clone]"
     pipelinesascode.tekton.dev/task-2: "[git-cli]"
@@ -62,8 +62,8 @@ spec:
             script: |
               #!/usr/bin/env sh
               set -eu
-              echo "Looking for release in environments/qa.yml"
-              export RELEASE_VERSION=$(cat environments/qa.yml | yq --raw-output0 .release_version | tr -d '\n')
+              echo "Looking for release in environments/prod.yml"
+              export RELEASE_VERSION=$(cat environments/prod.yml | yq --raw-output0 .release_version | tr -d '\n')
               echo -n $RELEASE_VERSION > $(results.release-version.path)
               FILE="releases/release-$RELEASE_VERSION.yml"
               if [ ! -f "$FILE" ]; then
@@ -112,8 +112,8 @@ spec:
             script: |
               #!/usr/bin/env sh
               set -euo pipefail
-              cp $(workspaces.shared-workspace.path)/rh1-release-manifest/releases/release-$(tasks.check-for-release-file.results.release-version).yml inventory/group_vars/aap_qa/release.yml
-              export AAP_HOST="http://aap-qa.aap-qa.svc.cluster.local"
+              cp $(workspaces.shared-workspace.path)/rh1-release-manifest/releases/release-$(tasks.check-for-release-file.results.release-version).yml inventory/group_vars/aap_prod/release.yml
+              export AAP_HOST="http://aap-prod.aap-prod.svc.cluster.local"
               export AAP_USERNAME="admin"
               export AAP_PASSWORD="$(cat "$(workspaces.aap-admin-password.path)/password")"
-              ansible-playbook -i inventory/inventory_qa.yml playbooks/playbook.yml
+              ansible-playbook -i inventory/inventory_prod.yml playbooks/playbook.yml
