@@ -149,50 +149,93 @@ spec:
           value: |
             git config --global --add safe.directory $(workspaces.source.path)/rh1-automation-playbooks
             cd rh1-automation-playbooks
-            git tag {{ git_tag }}
-            git push origin {{ git_tag }}
+            git tag -f {{ git_tag }}
+            git push origin {{ git_tag }} --force
         workspaces:
           - name: source
             workspace: repos-workspace
 
-      # - name: tag-and-push-rh1-custom-collection-playbooks-repo
-      #   runAfter:
-      #   - fetch-rh1-automation-playbooks-repo-source
-      #   taskRef:
-      #     name: git-cli
-      #   params:
-      #   - name: verbose
-      #     value: "true"
-      #   - name: git_user_name
-      #     value: "release-bot"
-      #   - name: git_script
-      #     value: |
-      #       git tag -a {{ git_tag }} -m "Release tag for {{ git_tag }}"
+      - name: tag-and-push-rh1-custom-collection-playbooks-repo
+        runAfter:
+        - fetch-rh1-automation-playbooks-repo-source
+        taskRef:
+          name: git-cli
+        params:
+        - name: VERBOSE
+          value: "true"
+        - name: GIT_USER_NAME
+          value: "release-bot"
+        - name: GIT_SCRIPT
+          value: |
+            git config --global --add safe.directory $(workspaces.source.path)/rh1-custom-collection
+            cd $(workspaces.source.path)/rh1-custom-collection
+            sed -i "s/^version:[[:space:]]*.*/version: {{ git_tag }}/ " galaxy.yml
+            git add galaxy.yml
+            git commit -m "Release tag for {{ git_tag }}"
+            git tag -f {{ git_tag }}
+            git push origin {{ git_tag }} --force
+        workspaces:
+          - name: source
+            workspace: repos-workspace
 
-      # - name: tag-and-push-rh1-ee-repo
-      #   runAfter:
-      #   - fetch-rh1-custom-collection-repo-source
-      #   taskRef:
-      #     name: git-cli
-      #   params:
-      #   - name: verbose
-      #     value: "true"
-      #   - name: git_user_name
-      #     value: "release-bot"
-      #   - name: git_script
-      #     value: |
-      #       git tag -a {{ git_tag }} -m "Release tag for {{ git_tag }}"
+      - name: wait-for-rh1-custom-collection-ci
+        runAfter:
+        - tag-and-push-rh1-custom-collection-playbooks-repo
+        workspaces:
+          - name: repos-workspace
+        taskSpec:
+          workspaces:
+          - name: repos-workspace
+          steps:
+          - name: sleep-100-seconds
+            image: registry.redhat.io/openshift4/ose-tools-rhel9
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+              echo "Sleeping for 100 seconds to simulate waiting for CI jobs to complete."
+              sleep 100
+              # TODO: Update this step to check GitHub API for CI/test status for release-{{ git_tag }}.yml
 
-      # - name: tag-and-push-rh1-aap-config-as-code-repo
-      #   runAfter:
-      #   - fetch-rh1-ee-repo-source
-      #   taskRef:
-      #     name: git-cli
-      #   params:
-      #   - name: verbose
-      #     value: "true"
-      #   - name: git_user_name
-      #     value: "release-bot"
-      #   - name: git_script
-      #     value: |
-      #       git tag -a {{ git_tag }} -m "Release tag for {{ git_tag }}"
+      - name: tag-and-push-rh1-ee-repo
+        runAfter:
+        - wait-for-rh1-custom-collection-ci
+        taskRef:
+          name: git-cli
+        params:
+        - name: VERBOSE
+          value: "true"
+        - name: GIT_USER_NAME
+          value: "release-bot"
+        - name: GIT_SCRIPT
+          value: |
+            git config --global --add safe.directory $(workspaces.source.path)/rh1-ee
+            cd $(workspaces.source.path)/rh1-ee
+            export TAG={{ git_tag }}
+            sed -i "/- name: myorg.custom_collection/{n; s/^[[:space:]]*version:.*/    version: ${TAG}/}" requirements.yml
+            git add requirements.yml
+            git commit -m "Release tag for {{ git_tag }}"
+            git tag -f {{ git_tag }}
+            git push origin {{ git_tag }} --force
+        workspaces:
+          - name: source
+            workspace: repos-workspace
+
+      - name: tag-and-push-rh1-aap-config-as-code-repo
+        runAfter:
+        - tag-and-push-rh1-ee-repo
+        taskRef:
+          name: git-cli
+        params:
+        - name: VERBOSE
+          value: "true"
+        - name: GIT_USER_NAME
+          value: "release-bot"
+        - name: GIT_SCRIPT
+          value: |
+            git config --global --add safe.directory $(workspaces.source.path)/rh1-aap-config-as-code
+            cd rh1-aap-config-as-code
+            git tag -f {{ git_tag }}
+            git push origin {{ git_tag }} --force
+        workspaces:
+          - name: source
+            workspace: repos-workspace
