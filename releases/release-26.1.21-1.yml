@@ -1,0 +1,57 @@
+---
+# Release 26.1.21-1 - Platform Configuration Update
+# Created: January 16, 2026
+release_version: "26.1.21-1"
+release_created: "2026-01-21T12:22:00Z"
+release_created_by: "platform-team"
+release_description: "Platform configuration update with improved monitoring and database backup"
+
+release_components:
+  playbooks:
+    repository: "https://github.com/djdanielsson/rh1-automation-playbooks.git"
+    commit: "main"  # Set by release-create pipeline
+    tag: "26.1.21-1"
+  collections:
+    repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
+    commit: "main"  # Set by release-create pipeline
+    tag: "26.1.21-1"
+    galaxy_version: "26.1.21-1"
+  execution_environment:
+    registry: "quay.io"
+    repository: "myorg/custom-ee"
+    tag: "26.1.21-1"
+    commit: "main" # Set by release-create pipeline
+    digest: "pending"  # Set by release-create pipeline
+  aap_configuration:
+    repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
+    commit: "main"  # Set by promote pipeline
+    branch: "main"
+
+jt_plat_configure_webserver: "26.1.21-1"
+jt_plat_configure_database: "26.1.21-1"
+jt_plat_configure_monitoring: "26.1.21-1"
+jt_plat_backup_database: "26.1.21-1"
+
+release_validation:
+  tests_required:
+    - smoke-tests
+    - integration-tests
+    - security-scan
+  tests_passed: []
+  approval_required: true
+  approved_by: null
+  approved_at: null
+
+release_metadata:
+  jira_ticket: "PLAT-200"
+  pull_requests:
+    - "https://github.com/djdanielsson/rh1-automation-playbooks/pull/15"
+    - "https://github.com/djdanielsson/rh1-custom-collection/pull/8"
+  changelog: |
+    - Improved monitoring agent configuration
+    - Added database backup validation
+    - Updated collection with new filters
+  rollback_tested: false
+  rollback_procedure: "tkn pipeline start release-rollback -p target_version=26.1.15-0 -p environment=<env>"
+
+release_rollback_history: []
