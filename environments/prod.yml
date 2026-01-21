@@ -4,9 +4,4 @@ release_created: "2026-01-16T09:00:00Z"
 release_created_by: "platform-team"
 release_description: "Platform configuration update with improved monitoring and database backup"
 
-jt_plat_configure_webserver: "26.1.16-0"
-jt_plat_configure_database: "26.1.16-0"
-jt_plat_configure_monitoring: "26.1.16-0"
-jt_plat_backup_database: "26.1.16-0"
-
 ...

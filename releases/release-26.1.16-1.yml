@@ -1,12 +1,12 @@
 ---
 # Release 26.1.16-1 - Platform Configuration Update
 # Created: January 16, 2026
-version: "26.1.16-1"
-created: "2026-01-16T09:00:00Z"
-created_by: "platform-team"
-description: "Platform configuration update with improved monitoring and database backup"
+release_version: "26.1.16-1"
+release_created: "2026-01-16T09:00:00Z"
+release_created_by: "platform-team"
+release_description: "Platform configuration update with improved monitoring and database backup"
 
-components:
+release_components:
   playbooks:
     repository: "https://github.com/djdanielsson/rh1-automation-playbooks.git"
     commit: "4c7762a1a5d635429e554575b3c756b29dc7cda6"  # Set by release-create pipeline
@@ -27,7 +27,12 @@ components:
     commit: "8611088b90c3cbd5afe70b82d1dc36337ee06891"  # Set by promote pipeline
     branch: "main"
 
-validation:
+jt_plat_configure_webserver: "26.1.16-1"
+jt_plat_configure_database: "26.1.16-1"
+jt_plat_configure_monitoring: "26.1.16-1"
+jt_plat_backup_database: "26.1.16-1"
+
+release_validation:
   tests_required:
     - smoke-tests
     - integration-tests
@@ -37,7 +42,7 @@ validation:
   approved_by: null
   approved_at: null
 
-metadata:
+release_metadata:
   jira_ticket: "PLAT-200"
   pull_requests:
     - "https://github.com/djdanielsson/rh1-automation-playbooks/pull/15"
@@ -49,4 +54,4 @@ metadata:
   rollback_tested: false
   rollback_procedure: "tkn pipeline start release-rollback -p target_version=26.1.15-0 -p environment=<env>"
 
-rollback_history: []
+release_rollback_history: []
