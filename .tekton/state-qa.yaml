@@ -60,7 +60,7 @@ spec:
               #!/usr/bin/env sh
               set -eu
               echo "Looking for release in environments/qa.yml"
-              export RELEASE_VERSION=$(cat environments/qa.yml | yq -r .release_version)
+              export RELEASE_VERSION=$(cat environments/qa.yml | yq --raw-output0 .release_version)
               echo $RELEASE_VERSION > $(results.release-version.path)
               FILE="releases/release-$RELEASE_VERSION.yml"
               if [ ! -f "$FILE" ]; then
