@@ -1,6 +1,6 @@
 ---
-release_version: "26.1.21-0"
-release_created: "2026-01-21T12:00:00Z"
+release_version: "26.1.21-1"
+release_created: "2026-01-21T12:28:00Z"
 release_created_by: "platform-team"
 release_description: "Platform configuration update with improved monitoring and database backup"
 
