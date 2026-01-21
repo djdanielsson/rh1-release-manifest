@@ -81,7 +81,7 @@ spec:
         - name: GIT_SCRIPT
           value: |
             git config --global --add safe.directory $(workspaces.source.path)/rh1-aap-config-as-code
-            git clone --branch $(tasks.check-for-release-file.results.release-version) https://github.com/djdanielsson/rh1-aap-config-as-code.git
+            git clone https://github.com/djdanielsson/rh1-aap-config-as-code.git --branch $(tasks.check-for-release-file.results.release-version)
         workspaces:
           - name: source
             workspace: repos-workspace
