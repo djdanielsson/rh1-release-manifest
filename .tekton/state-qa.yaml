@@ -60,7 +60,7 @@ spec:
               #!/usr/bin/env sh
               set -eu
               echo "Looking for release in environments/qa.yml"
-              export RELEASE_VERSION=$(cat environments/qa.yml | yq -r .release_version)
+              export RELEASE_VERSION=$(cat environments/qa.yml | yq -r.release_version)
               echo $RELEASE_VERSION > $(results.release-version.path)
               FILE="releases/release-$RELEASE_VERSION.yml"
               if [ ! -f "$FILE" ]; then
@@ -74,19 +74,17 @@ spec:
         runAfter:
         - check-for-release-file
         taskRef:
-          name: git-clone
+          name: git-cli
         params:
-        - name: url
-          value: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
-        - name: revision
-          value: refs/tags/$(tasks.check-for-release-file.results.release-version)
-        - name: verbose
+        - name: VERBOSE
           value: "true"
-        - name: subdirectory
-          value: "rh1-aap-config-as-code"
+        - name: GIT_SCRIPT
+          value: |
+            git config --global --add safe.directory $(workspaces.source.path)/rh1-aap-config-as-code
+            git clone --branch $(tasks.check-for-release-file.results.release-version) https://github.com/djdanielsson/rh1-aap-config-as-code.git
         workspaces:
-        - name: output
-          workspace: repos-workspace
+          - name: source
+            workspace: repos-workspace
 
       - name: dispatch-aap-state
         runAfter:
