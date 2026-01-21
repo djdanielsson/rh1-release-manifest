@@ -79,7 +79,7 @@ spec:
         - name: url
           value: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
         - name: revision
-          value: $(tasks.check-for-release-file.results.release-version)
+          value: refs/tags/$(tasks.check-for-release-file.results.release-version)
         - name: verbose
           value: "true"
         - name: subdirectory
