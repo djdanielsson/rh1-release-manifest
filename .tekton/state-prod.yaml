@@ -1,0 +1,119 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: state-qa
+  annotations:
+    pipelinesascode.tekton.dev/task-1: "[git-clone]"
+    pipelinesascode.tekton.dev/task-2: "[git-cli]"
+    pipelinesascode.tekton.dev/on-event: "[push]"
+    pipelinesascode.tekton.dev/on-target-branch: "[refs/heads/main]"
+    pipelinesascode.tekton.dev/on-path-change: "[environments/prod.yml]"
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+spec:
+  workspaces:
+  - name: repos-workspace
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  - name: aap-admin-password
+    secret:
+      secretName: aap-admin-password
+
+  pipelineSpec:
+    workspaces:
+    - name: repos-workspace
+    tasks:
+      - name: fetch-rh1-release-manifest-repo-source
+        taskRef:
+          name: git-clone
+        params:
+        - name: url
+          value: "{{ repo_url }}"
+        - name: revision
+          value: "main"
+        - name: verbose
+          value: "true"
+        - name: subdirectory
+          value: "rh1-release-manifest"
+        workspaces:
+        - name: output
+          workspace: repos-workspace
+
+      - name: check-for-release-file
+        runAfter:
+        - fetch-rh1-release-manifest-repo-source
+        workspaces:
+          - name: repos-workspace
+        taskSpec:
+          workspaces:
+          - name: repos-workspace
+          results:
+          - name: release-version
+            description: "The release version"
+            type: string
+          steps:
+          - name: check-for-release-file
+            workingDir: $(workspaces.repos-workspace.path)/rh1-release-manifest
+            image: docker.io/linuxserver/yq:latest
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+              echo "Looking for release in environments/qa.yml"
+              export RELEASE_VERSION=$(cat environments/qa.yml | yq --raw-output0 .release_version | tr -d '\n')
+              echo -n $RELEASE_VERSION > $(results.release-version.path)
+              FILE="releases/release-$RELEASE_VERSION.yml"
+              if [ ! -f "$FILE" ]; then
+                echo "Error: $FILE file does not exist."
+                exit 1
+              else
+                echo "$FILE found."
+              fi
+
+      - name: fetch-rh1-aap-config-as-code-repo-source
+        runAfter:
+        - check-for-release-file
+        taskRef:
+          name: git-cli
+        params:
+        - name: VERBOSE
+          value: "true"
+        - name: GIT_SCRIPT
+          value: |
+            git config --global --add safe.directory $(workspaces.source.path)/rh1-aap-config-as-code
+            git clone https://github.com/djdanielsson/rh1-aap-config-as-code.git --branch $(tasks.check-for-release-file.results.release-version)
+        workspaces:
+          - name: source
+            workspace: repos-workspace
+
+      - name: dispatch-aap-state
+        runAfter:
+        - fetch-rh1-aap-config-as-code-repo-source
+        workspaces:
+        - name: shared-workspace
+          workspace: repos-workspace
+        - name: aap-admin-password
+          workspace: aap-admin-password
+        params:
+        - name: aap-admin-password
+          value: "workspace"
+        taskSpec:
+          workspaces:
+          - name: shared-workspace
+          params:
+          - name: aap-admin-password
+          steps:
+          - name: test-aap-instance
+            workingDir: $(workspaces.shared-workspace.path)/rh1-aap-config-as-code
+            image: quay.io/igou/rh1-ee:$(tasks.check-for-release-file.results.release-version)
+            script: |
+              #!/usr/bin/env sh
+              set -euo pipefail
+              cp $(workspaces.shared-workspace.path)/rh1-release-manifest/releases/release-$(tasks.check-for-release-file.results.release-version).yml inventory/group_vars/aap_qa/release.yml
+              export AAP_HOST="http://aap-qa.aap-qa.svc.cluster.local"
+              export AAP_USERNAME="admin"
+              export AAP_PASSWORD="$(cat "$(workspaces.aap-admin-password.path)/password")"
+              ansible-playbook -i inventory/inventory_qa.yml playbooks/playbook.yml
