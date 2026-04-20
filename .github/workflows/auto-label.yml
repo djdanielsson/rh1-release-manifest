@@ -1,3 +1,5 @@
+permissions:
+  contents: read
 ---
 name: Auto Label
 
@@ -14,10 +16,10 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Label based on changed files
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -70,7 +72,7 @@ jobs:
             }
 
       - name: Label by size
-        uses: codelytv/pr-size-labeler@v1
+        uses: codelytv/pr-size-labeler@fb469dd4372da087f5f75175cc5ff84fda82b837 # v1
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           xs_label: 'size/xs'
