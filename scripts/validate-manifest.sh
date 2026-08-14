@@ -163,6 +163,37 @@ validate_image_digests() {
     fi
 }
 
+# Check release manifest Cosign signature metadata
+validate_release_signatures() {
+    local manifest="$1"
+    info "Checking release signatures in $manifest..."
+
+    if grep -q "release_signatures:" "$manifest"; then
+        if grep -A5 "release_signatures:" "$manifest" | grep -q "manifest_signed: true"; then
+            success "Manifest marked as signed"
+        else
+            warning "release_signatures present but manifest_signed is not true"
+        fi
+        local sig_file="${manifest}.sig"
+        if [ -f "$sig_file" ]; then
+            success "Signature sidecar found: $sig_file"
+            if command -v cosign >/dev/null 2>&1 && [ -n "${COSIGN_PUBKEY_FILE:-}" ]; then
+                if cosign verify-blob --key "${COSIGN_PUBKEY_FILE}" --signature "$sig_file" "$manifest" >/dev/null 2>&1; then
+                    success "Cosign signature verification passed"
+                else
+                    error "Cosign signature verification failed for $manifest"
+                fi
+            else
+                info "Skipping cosign verify-blob (cosign or COSIGN_PUBKEY_FILE not available)"
+            fi
+        else
+            warning "Missing signature sidecar: $sig_file"
+        fi
+    else
+        info "No release_signatures block in $manifest"
+    fi
+}
+
 # Check production safety (no latest/main/master tags)
 validate_production_safety() {
     local manifest="$1"
@@ -204,6 +235,7 @@ validate_manifest_file() {
     validate_version_format "$manifest" || true
     validate_commit_shas "$manifest" || true
     validate_image_digests "$manifest" || true
+    validate_release_signatures "$manifest" || true
     validate_production_safety "$manifest" || true
 }
 

@@ -303,6 +303,59 @@
             }
           }
         },
+        "signatures": {
+          "type": "object",
+          "description": "Content signature verification metadata",
+          "properties": {
+            "manifestSigned": {
+              "type": "boolean",
+              "description": "Whether the release manifest blob is signed"
+            },
+            "signedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the manifest was signed"
+            },
+            "signedBy": {
+              "type": "string",
+              "description": "Identity that signed the manifest"
+            },
+            "signatureRef": {
+              "type": "string",
+              "description": "Path to the Cosign signature sidecar file"
+            },
+            "bundleRef": {
+              "type": "string",
+              "description": "Path to the Cosign bundle file"
+            },
+            "components": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "signatureVerified"],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["collection", "execution-environment", "aap-config", "cluster-config", "playbooks"]
+                  },
+                  "digest": {
+                    "type": "string",
+                    "pattern": "^sha256:[a-f0-9]{64}$"
+                  },
+                  "signatureVerified": {
+                    "type": "boolean"
+                  },
+                  "signer": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "rollbackTarget": {
           "type": "string",
           "description": "Previous release version for rollback",
