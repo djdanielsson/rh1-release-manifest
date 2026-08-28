@@ -5,6 +5,7 @@ metadata:
   annotations:
     pipelinesascode.tekton.dev/task-1: "[git-clone]"
     pipelinesascode.tekton.dev/task-2: "[git-cli]"
+    pipelinesascode.tekton.dev/task-3: "https://raw.githubusercontent.com/djdanielsson/rh1-cluster-config/refs/heads/main/tekton-tasks/cosign-verify-blob-task.yml"
     pipelinesascode.tekton.dev/on-event: "[push]"
     pipelinesascode.tekton.dev/on-target-branch: "[refs/heads/main]"
     pipelinesascode.tekton.dev/on-path-change: "[environments/qa.yml]"
@@ -22,10 +23,14 @@ spec:
   - name: aap-admin-password
     secret:
       secretName: aap-admin-password
+  - name: cosign-public-key
+    secret:
+      secretName: cosign-public-key
 
   pipelineSpec:
     workspaces:
     - name: repos-workspace
+    - name: cosign-public-key
     tasks:
       - name: fetch-rh1-release-manifest-repo-source
         taskRef:
@@ -73,9 +78,23 @@ spec:
                 echo "$FILE found."
               fi
 
-      - name: fetch-rh1-aap-config-as-code-repo-source
+      - name: verify-manifest-signature
         runAfter:
         - check-for-release-file
+        taskRef:
+          name: cosign-verify-blob
+        params:
+        - name: BLOB_PATH
+          value: "rh1-release-manifest/releases/release-$(tasks.check-for-release-file.results.release-version).yml"
+        workspaces:
+        - name: source
+          workspace: repos-workspace
+        - name: cosign-keys
+          workspace: cosign-public-key
+
+      - name: fetch-rh1-aap-config-as-code-repo-source
+        runAfter:
+        - verify-manifest-signature
         taskRef:
           name: git-cli
         params:

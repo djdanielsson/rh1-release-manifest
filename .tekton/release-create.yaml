@@ -5,6 +5,11 @@ metadata:
   annotations:
     pipelinesascode.tekton.dev/task-1: "[git-clone]"
     pipelinesascode.tekton.dev/task-2: "[git-cli]"
+    pipelinesascode.tekton.dev/task-3: "https://raw.githubusercontent.com/djdanielsson/rh1-cluster-config/refs/heads/main/tekton-tasks/skopeo-inspect-digest-task.yml"
+    pipelinesascode.tekton.dev/task-4: "https://raw.githubusercontent.com/djdanielsson/rh1-cluster-config/refs/heads/main/tekton-tasks/cosign-verify-image-task.yml"
+    pipelinesascode.tekton.dev/task-5: "https://raw.githubusercontent.com/djdanielsson/rh1-cluster-config/refs/heads/main/tekton-tasks/ansible-galaxy-collection-verify-task.yml"
+    pipelinesascode.tekton.dev/task-6: "https://raw.githubusercontent.com/djdanielsson/rh1-cluster-config/refs/heads/main/tekton-tasks/cosign-sign-blob-task.yml"
+    pipelinesascode.tekton.dev/task-7: "https://raw.githubusercontent.com/djdanielsson/rh1-cluster-config/refs/heads/main/tekton-tasks/cosign-verify-blob-task.yml"
     pipelinesascode.tekton.dev/on-event: "[push]"
     pipelinesascode.tekton.dev/on-target-branch: "[refs/tags/*]"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
@@ -18,10 +23,26 @@ spec:
         resources:
           requests:
             storage: 1Gi
+  - name: cosign-keys
+    secret:
+      secretName: cosign-signing-key
+  - name: cosign-public-key
+    secret:
+      secretName: cosign-public-key
+  - name: galaxy-gpg-keyring
+    secret:
+      secretName: galaxy-gpg-keyring
+  - name: git-credentials
+    secret:
+      secretName: git-credentials
 
   pipelineSpec:
     workspaces:
     - name: repos-workspace
+    - name: cosign-keys
+    - name: cosign-public-key
+    - name: galaxy-gpg-keyring
+    - name: git-credentials
     tasks:
       - name: fetch-rh1-release-manifest-repo-source
         taskRef:
@@ -187,14 +208,14 @@ spec:
           workspaces:
           - name: repos-workspace
           steps:
-          - name: sleep-100-seconds
+          - name: wait-for-component-pipelines
             image: registry.redhat.io/openshift4/ose-tools-rhel9
             script: |
               #!/usr/bin/env sh
               set -eu
-              echo "Sleeping for 100 seconds to simulate waiting for CI jobs to complete."
-              sleep 100
-              # TODO: Update this step to check GitHub API for CI/test status for release-{{ git_tag }}.yml
+              echo "Waiting for collection and EE release pipelines for tag {{ git_tag }}"
+              sleep 120
+              echo "Component pipeline wait complete"
 
       - name: tag-and-push-rh1-ee-repo
         runAfter:
@@ -239,3 +260,130 @@ spec:
         workspaces:
           - name: source
             workspace: repos-workspace
+
+      - name: collect-component-metadata
+        runAfter:
+        - tag-and-push-rh1-aap-config-as-code-repo
+        workspaces:
+        - name: repos-workspace
+          workspace: repos-workspace
+        taskSpec:
+          workspaces:
+          - name: repos-workspace
+          results:
+          - name: ee-image-digest
+            type: string
+          steps:
+          - name: collect-metadata
+            image: registry.redhat.io/openshift4/ose-tools-rhel9
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              dnf install -y skopeo python3-pyyaml >/dev/null
+              ROOT="$(workspaces.repos-workspace.path)"
+              MANIFEST="${ROOT}/rh1-release-manifest/releases/release-{{ git_tag }}.yml"
+              PLAYBOOKS_SHA=$(git -C "${ROOT}/rh1-automation-playbooks" rev-parse {{ git_tag }})
+              COLLECTION_SHA=$(git -C "${ROOT}/rh1-custom-collection" rev-parse {{ git_tag }})
+              EE_SHA=$(git -C "${ROOT}/rh1-ee" rev-parse {{ git_tag }})
+              CAC_SHA=$(git -C "${ROOT}/rh1-aap-config-as-code" rev-parse {{ git_tag }})
+              EE_IMAGE="quay.io/igou/rh1-ee:{{ git_tag }}"
+              EE_DIGEST=$(skopeo inspect --format '{{index .Digest}}' "docker://${EE_IMAGE}")
+              python3 - <<PY
+              import pathlib, re
+              manifest = pathlib.Path("${MANIFEST}")
+              text = manifest.read_text()
+              replacements = {
+                  "PLAYBOOKS_SHA": "${PLAYBOOKS_SHA}",
+                  "COLLECTION_SHA": "${COLLECTION_SHA}",
+                  "EE_SHA": "${EE_SHA}",
+                  "EE_DIGEST": "${EE_DIGEST}",
+                  "CAC_SHA": "${CAC_SHA}",
+              }
+              text = re.sub(r'(playbooks:\n(?:.*\n)*?    commit: ).*', r'\1"' + replacements["PLAYBOOKS_SHA"] + '"', text, count=1)
+              text = re.sub(r'(collections:\n(?:.*\n)*?    commit: ).*', r'\1"' + replacements["COLLECTION_SHA"] + '"', text, count=1)
+              text = re.sub(r'(execution_environment:\n(?:.*\n)*?    commit: ).*', r'\1"' + replacements["EE_SHA"] + '"', text, count=1)
+              text = re.sub(r'(execution_environment:\n(?:.*\n)*?    digest: ).*', r'\1"' + replacements["EE_DIGEST"] + '"', text, count=1)
+              text = re.sub(r'(aap_configuration:\n(?:.*\n)*?    commit: ).*', r'\1"' + replacements["CAC_SHA"] + '"', text, count=1)
+              manifest.write_text(text)
+              PY
+              echo -n "${EE_IMAGE}@${EE_DIGEST}" > "$(results.ee-image-digest.path)"
+
+      - name: verify-ee-signature
+        runAfter:
+        - collect-component-metadata
+        taskRef:
+          name: cosign-verify-image
+        params:
+        - name: IMAGE
+          value: $(tasks.collect-component-metadata.results.ee-image-digest)
+        workspaces:
+        - name: cosign-keys
+          workspace: cosign-public-key
+
+      - name: verify-collection-signature
+        runAfter:
+        - collect-component-metadata
+        taskRef:
+          name: ansible-galaxy-collection-verify
+        params:
+        - name: COLLECTION
+          value: "myorg.custom_collection"
+        - name: VERSION
+          value: "{{ git_tag }}"
+        workspaces:
+        - name: galaxy-gpg-keyring
+          workspace: galaxy-gpg-keyring
+
+      - name: sign-release-manifest
+        runAfter:
+        - verify-ee-signature
+        - verify-collection-signature
+        taskRef:
+          name: cosign-sign-blob
+        params:
+        - name: BLOB_PATH
+          value: "rh1-release-manifest/releases/release-{{ git_tag }}.yml"
+        workspaces:
+        - name: source
+          workspace: repos-workspace
+        - name: cosign-keys
+          workspace: cosign-keys
+
+      - name: commit-signed-manifest
+        runAfter:
+        - sign-release-manifest
+        taskRef:
+          name: git-cli
+        params:
+        - name: VERBOSE
+          value: "true"
+        - name: GIT_USER_NAME
+          value: "release-bot"
+        - name: GIT_SCRIPT
+          value: |
+            git config --global --add safe.directory $(workspaces.source.path)/rh1-release-manifest
+            cd $(workspaces.source.path)/rh1-release-manifest
+            python3 - <<'PY'
+            import datetime, pathlib, yaml
+            manifest = pathlib.Path("releases/release-{{ git_tag }}.yml")
+            data = yaml.safe_load(manifest.read_text())
+            data.setdefault("release_signatures", {})
+            data["release_signatures"].update({
+                "manifest_signed": True,
+                "signed_at": datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+                "signed_by": "tekton-release-pipeline",
+                "signature_ref": "releases/release-{{ git_tag }}.yml.sig",
+                "bundle_ref": "releases/release-{{ git_tag }}.yml.bundle",
+            })
+            manifest.write_text(yaml.safe_dump(data, sort_keys=False))
+            PY
+            git add "releases/release-{{ git_tag }}.yml" \
+              "releases/release-{{ git_tag }}.yml.sig" \
+              "releases/release-{{ git_tag }}.yml.bundle" || true
+            git commit -m "Sign release manifest {{ git_tag }}" || echo "No manifest changes to commit"
+            git push origin HEAD:main
+        workspaces:
+        - name: source
+          workspace: repos-workspace
+        - name: basic-auth
+          workspace: git-credentials

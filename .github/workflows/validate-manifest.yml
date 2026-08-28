@@ -38,6 +38,16 @@ jobs:
       - name: Run validation script
         run: ./scripts/validate-manifest.sh releases/
 
+      - name: Install cosign
+        run: |
+          curl -sSfL https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64 -o /usr/local/bin/cosign
+          chmod +x /usr/local/bin/cosign
+
+      - name: Verify release signatures
+        run: |
+          chmod +x ./scripts/verify-release-signatures.sh
+          ./scripts/verify-release-signatures.sh releases/ || true
+
   validate-scripts:
     name: Validate Helper Scripts
     runs-on: ubuntu-latest

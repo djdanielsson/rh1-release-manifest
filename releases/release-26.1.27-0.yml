@@ -9,24 +9,24 @@ release_description: "Platform configuration update with improved monitoring and
 release_components:
   playbooks:
     repository: "https://github.com/djdanielsson/rh1-automation-playbooks.git"
-    commit: "main"
+    commit: "4c7762a1a5d635429e554575b3c756b29dc7cda6"
     tag: "26.1.27-0"
   collections:
     repository: "https://github.com/djdanielsson/rh1-custom-collection.git"
-    commit: "main"
+    commit: "54d6c638e1dcdddd2886833dacd137f557ef7f78"
     tag: "26.1.27-0"
     galaxy_version: "26.1.27-0"
   execution_environment:
     registry: "quay.io"
-    repository: "myorg/custom-ee"
+    repository: "igou/rh1-ee"
     git_repo: "https://github.com/djdanielsson/rh1-ee.git"
     tag: "26.1.27-0"
-    commit: "main"
-    digest: "latest"
+    commit: "499c4ed4962e3b8ecc001cda82310cf354c4c898"
+    digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   aap_configuration:
     repository: "https://github.com/djdanielsson/rh1-aap-config-as-code.git"
-    commit: "main"
-    branch: "main"
+    commit: "8611088b90c3cbd5afe70b82d1dc36337ee06891"
+    branch: "26.1.27-0"
 
 jt_plat_configure_webserver: "26.1.16-1"
 jt_plat_configure_database: "26.1.27-0"
@@ -42,6 +42,13 @@ release_validation:
   approval_required: true
   approved_by: null
   approved_at: null
+
+release_signatures:
+  manifest_signed: false
+  signed_at: null
+  signed_by: null
+  signature_ref: null
+  bundle_ref: null
 
 release_metadata:
   jira_ticket: "PLAT-200"

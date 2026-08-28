@@ -361,24 +361,22 @@ See `tekton/tasks/create-manifest.yaml` for implementation.
 
 ## Secrets Management
 
-All secrets are managed via **HashiCorp Vault**:
+All secrets are managed via **HashiCorp Vault** (KV v2, path prefix `rh1/`):
 
 ```yaml
 # Vault paths for release automation
-secret/data/release-manifest:
-  github-token: "<token-for-git-operations>"
+secret/data/rh1/platform/ci/github:
+  username: "git"
+  password: "<token-for-git-operations>"
 
-secret/data/aap-dev:
-  controller_host: "https://aap-dev.apps.cluster.example.com"
-  controller_password: "<from-vault>"
+secret/data/rh1/platform/aap/dev/admin-password:
+  password: "<from-vault>"
 
-secret/data/aap-qa:
-  controller_host: "https://aap-qa.apps.cluster.example.com"
-  controller_password: "<from-vault>"
+secret/data/rh1/platform/aap/qa/admin-password:
+  password: "<from-vault>"
 
-secret/data/aap-prod:
-  controller_host: "https://aap-prod.apps.cluster.example.com"
-  controller_password: "<from-vault>"
+secret/data/rh1/platform/aap/prod/admin-password:
+  password: "<from-vault>"
 ```
 
 ## Best Practices
